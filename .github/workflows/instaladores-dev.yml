@@ -1,0 +1,43 @@
+name: Instaladores Windows (dev)
+
+# Todo commit na `dev` DESTE repositório que toque um instalador regera TefAgentSetup e PrintMonitorSetup
+# a partir do HEAD da `dev` do backend (PRD-INSTDEV-02). A balança fica fora pelo campo `canais` do
+# manifesto (PRD-INSTDEV-01, D2).
+#
+# O outro gatilho da dev — commit do BACKEND que toque os agentes — não passa por aqui: o
+# `instaladores-dev.yml` do backend dispara o `instaladores-windows.yml` deste repositório direto, por
+# `gh workflow run --ref dev -f canal=dev -f sha=<sha do backend>`.
+#
+# GATILHO POR `paths` (D4): o runner `[self-hosted, windows, instaladores]` é ÚNICO e executa um job
+# por vez; README, PRD ou doc não alteram pacote nenhum.
+on:
+  push:
+    branches: [dev]
+    paths:
+      # .iss, includes, build-installer.ps1, manifesto da matriz e o módulo de empacotamento.
+      - 'installer/**'
+      # As guardas .iss × backend rodam antes de empacotar: mudança nelas precisa provar que segue verde.
+      - 'tests/**'
+      - '.github/workflows/instaladores-dev.yml'
+      - '.github/workflows/instaladores-windows.yml'
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit do BACKEND a empacotar. Vazio = HEAD da dev do backend.'
+        type: string
+        required: false
+        default: ''
+
+jobs:
+  instaladores:
+    # Liga-desliga do épico (D6): sem o runner registrado o job ficaria na fila e o Actions o
+    # cancelaria em 24 h. O `if` fica AQUI, no chamador: dentro do reusable marcaria os jobs internos
+    # como `skipped` com o workflow ainda "executado", em vez de o run inteiro aparecer como pulado.
+    if: ${{ vars.INSTALADORES_WINDOWS == 'true' }}
+    uses: ./.github/workflows/instaladores-windows.yml
+    with:
+      canal: dev
+      # Vazio = HEAD da dev do backend, resolvido pelo job `matriz` (o SHA deste repositório não é um
+      # commit do backend, então NÃO há fallback para github.sha aqui, ao contrário do backend).
+      sha: ${{ inputs.sha }}
+    secrets: inherit

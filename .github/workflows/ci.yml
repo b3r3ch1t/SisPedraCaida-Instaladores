@@ -1,0 +1,48 @@
+name: ci
+
+# Portão de PR do repositório de instaladores: os testes Pester do núcleo de empacotamento e as guardas
+# que comparam os `.iss` com o C# do backend (códigos de saída, portas do QZ Tray, argumentos do Helper,
+# manifesto × Windows services de src/). É o mesmo conjunto que o job `testar` do
+# instaladores-windows.yml roda antes de empacotar — aqui ele roda sem o runner Windows dos instaladores.
+#
+# `windows-latest` (hospedado): o projeto de guardas é `net10.0-windows` (referencia o PrintMonitor.Setup,
+# WindowsDesktop) e o testhost exige o runtime Windows. O backend entra na `dev`, que é onde o `.iss` novo
+# vai ser empacotado primeiro; divergência com a `prod` aparece no run de release, antes de empacotar.
+on:
+  pull_request:
+    branches: [dev, prod]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: 'true'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/checkout@v5
+        with:
+          repository: b3r3ch1t/SisPedraCaida-Backend
+          token: ${{ secrets.SISPEDRACAIDA_BACKEND_TOKEN }}
+          ref: ${{ github.base_ref == 'prod' && 'prod' || 'dev' }}
+          path: backend
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: backend/global.json
+
+      - name: Testes do Empacotamento.psm1
+        shell: pwsh
+        run: ./installer/common/Invoke-TestesEmpacotamento.ps1
+
+      - name: Guardas .iss × backend
+        shell: pwsh
+        run: dotnet test tests/SisPedraCaida.Instaladores.Tests -c Release -p:BackendDir=$env:GITHUB_WORKSPACE/backend/

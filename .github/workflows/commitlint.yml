@@ -1,0 +1,58 @@
+name: commitlint
+
+# Camada CI autoritativa da validação de commits (PRD Versionamento Automático §9.3, RF10/RF11).
+# Complementa o release-please (que apenas CONSOME os Conventional Commits): aqui eles são ENFORÇADOS.
+# Roda em PRs para a `dev` e barra o merge de qualquer commit/PR fora do padrão — independentemente de
+# o dev ter pulado o hook local (`--no-verify`).
+#
+#  - job `commitlint` (wagoid): valida TODOS os commits do PR contra `commitlint.config.mjs`.
+#  - job `pr-title`  (amannn):  valida o TÍTULO do PR — é ele que vira a mensagem no fluxo *squash*.
+#
+# ⚠️ Runner: `ubuntu-latest` (hospedado). Os runners Linux `[self-hosted, sispedracaida]` estão
+# registrados só nos outros três repositórios (conta pessoal: runner é por repositório), e os jobs
+# daqui duram segundos.
+on:
+  pull_request:
+    branches: [dev, prod]
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  commitlint:
+    name: commitlint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (histórico completo p/ varrer os commits do PR)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Validar commits (Conventional Commits)
+        uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: commitlint.config.mjs
+
+  pr-title:
+    name: pr-title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validar título do PR (fluxo squash)
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Mesma lista de tipos do commitlint.config.js (PRD §5).
+          types: |
+            feat
+            fix
+            perf
+            refactor
+            docs
+            style
+            test
+            chore
+            ci
+            build
+            revert
