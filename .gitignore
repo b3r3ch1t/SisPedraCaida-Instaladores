@@ -1,0 +1,18 @@
+# Build e testes
+bin/
+obj/
+TestResults/
+*.user
+.vs/
+.idea/
+
+# Saída dos build-installer.ps1. A única exceção versionada é artifacts/installer/, e entra com
+# `git add -f` (uma versão só por agente — ver CLAUDE.md, armadilha (l)).
+artifacts/
+
+# Checkout do backend que o CI (e quem quiser, localmente) faz dentro deste repositório.
+backend/
+.worktrees/
+
+# Tooling do commitlint
+node_modules/
