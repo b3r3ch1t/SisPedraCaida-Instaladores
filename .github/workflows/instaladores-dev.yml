@@ -28,6 +28,13 @@ on:
         required: false
         default: ''
 
+# ⚠️ OBRIGATÓRIO: o reusable pede `contents: write` (release dev-latest), e o GITHUB_TOKEN deste
+# repositório nasce SÓ DE LEITURA (default_workflow_permissions = read). Sem conceder aqui, o GitHub
+# recusa o run inteiro no startup (`startup_failure`) — mesmo com o job pulado pelo `if`. O backend não
+# tinha isso porque lá o padrão é escrita.
+permissions:
+  contents: write
+
 jobs:
   instaladores:
     # Liga-desliga do épico (D6): sem o runner registrado o job ficaria na fila e o Actions o
