@@ -5,7 +5,7 @@
 > §3). Antes (22/10/2026 16:35): PRD-INSTDEV-04.
 
 Como preparar uma máquina Windows e gerar à mão o `TefAgentSetup-<versão>.exe`, o
-`PrintMonitorSetup-<versão>.exe` e o `BalancaAgentSetup-<versão>.exe`.
+`PrintMonitorSetup-<versão>.exe`, o `BalancaAgentSetup-<versão>.exe` e o `TotemSetup-<versão>.exe`.
 
 **Este doc é sobre a máquina que GERA o pacote, não sobre a estação que o executa.** Os
 pré-requisitos de quem instala estão, no backend, em [`TefAgentInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/TefAgentInstalador.md) §5.1,
@@ -162,10 +162,12 @@ pwsh installer/tefagent/build-installer.ps1 -UseWorkingTree -SkipPublish -DryRun
 pwsh installer/tefagent/build-installer.ps1 -Ref <sha> -Version 3.10.0
 ```
 
-A balança segue o molde do (1): `pwsh installer/balanca/build-installer.ps1 -Ref origin/dev`.
+A balança segue o molde do (1): `pwsh installer/balanca/build-installer.ps1 -Ref origin/dev`. O totem
+também, com o bootstrapper do WebView2 opcional (sem ele o pacote sai sem o runtime e a checagem só avisa):
+`pwsh installer/totem/build-installer.ps1 -Ref origin/dev -WebView2BootstrapperPath <pasta com o .exe e o webview2.sha256>`.
 
 **Saída:** `artifacts/installer/<Nome>-<versão>.exe` + `<Nome>-<versão>.exe.sha256`, com
-`<Nome>` ∈ { `TefAgentSetup`, `PrintMonitorSetup`, `BalancaAgentSetup` }. O hash é a **única prova de
+`<Nome>` ∈ { `TefAgentSetup`, `PrintMonitorSetup`, `BalancaAgentSetup`, `TotemSetup` }. O hash é a **única prova de
 integridade** do pacote — ele não é assinado por CA pública (decisão D6 do PRD-TEFINST-00). Confira
 com:
 

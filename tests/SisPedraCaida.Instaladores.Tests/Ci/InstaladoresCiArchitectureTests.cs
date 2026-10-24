@@ -11,7 +11,7 @@ namespace SisPedraCaida.Instaladores.Tests;
 /// <remarks>
 /// <para>
 /// O pipeline de prod empacota um instalador por linha do manifesto. Sem esta guarda, um Windows
-/// Service novo (o Totem, por exemplo) nasceria compilando, testado e com Dockerfile nenhum — e
+/// Service novo (como foi o Totem) nasceria compilando, testado e com Dockerfile nenhum — e
 /// <b>nenhum instalador sairia da release</b>, sem nada ficar vermelho: a matriz só conhece o que
 /// alguém lembrou de escrever nela. É o mesmo furo que deixou o <c>Scheduler.Worker</c> fora da
 /// matriz de imagens (<see cref="DockerPublishMatrixArchitectureTests"/>).
@@ -76,8 +76,8 @@ public partial class InstaladoresCiArchitectureTests
 
         // Sem isto a guarda passaria vazia no dia em que a varredura deixasse de achar os serviços.
         Assert.True(
-            servicos.Count >= 3,
-            $"Esperava ao menos Tef.Agent, PrintMonitor.Service e Balanca.Agent; achei {servicos.Count}: {string.Join(", ", servicos)}.");
+            servicos.Count >= 4,
+            $"Esperava ao menos Tef.Agent, PrintMonitor.Service, Balanca.Agent e Totem.Agent; achei {servicos.Count}: {string.Join(", ", servicos)}.");
 
         var cobertos = manifesto.Instaladores.SelectMany(i => i.Projetos)
             .Concat(manifesto.Pendentes.Select(p => p.Projeto))

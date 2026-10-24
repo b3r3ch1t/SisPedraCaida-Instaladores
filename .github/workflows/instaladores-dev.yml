@@ -1,8 +1,8 @@
 name: Instaladores Windows (dev)
 
-# Todo commit na `dev` DESTE repositório que toque um instalador regera TefAgentSetup e PrintMonitorSetup
-# a partir do HEAD da `dev` do backend (PRD-INSTDEV-02). A balança fica fora pelo campo `canais` do
-# manifesto (PRD-INSTDEV-01, D2).
+# Todo commit na `dev` DESTE repositório que toque um instalador regera TefAgentSetup, PrintMonitorSetup
+# e TotemSetup a partir do HEAD da `dev` do backend (PRD-INSTDEV-02). A balança fica fora pelo campo
+# `canais` do manifesto (PRD-INSTDEV-01, D2).
 #
 # O outro gatilho da dev — commit do BACKEND que toque os agentes — não passa por aqui: o
 # `instaladores-dev.yml` do backend dispara o `instaladores-windows.yml` deste repositório direto, por

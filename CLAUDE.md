@@ -1,8 +1,9 @@
 # SisPedraCaida-Instaladores — Guia
 
-> **Última atualização deste CLAUDE.md:** 23/10/2026 17:30 (horário local, UTC-3) — repositório criado
-> com os instaladores Windows e o CI/CD que viviam no `SisPedraCaida-Backend` (épico `repo-instaladores`,
-> [`PRD/DONE/repo-instaladores/`](PRD/DONE/repo-instaladores/)).
+> **Última atualização deste CLAUDE.md:** 24/10/2026 12:07 (horário local, UTC-3) — instalador do
+> **totem** (`installer/totem/`) trazido junto: entrou no backend (PRD-TOTEM-04, PR #1226) depois do corte
+> desta migração · antes (23/10/2026 17:30): repositório criado com os instaladores Windows e o CI/CD que
+> viviam no `SisPedraCaida-Backend` (épico `repo-instaladores`, [`PRD/DONE/repo-instaladores/`](PRD/DONE/repo-instaladores/)).
 >
 > **Premissa de tamanho:** máximo **500K**; conferir com `wc -c CLAUDE.md` a cada atualização.
 >
@@ -16,6 +17,7 @@ pipeline que os gera e publica. Comunicação, docs, commits e PRDs em **portugu
 | `TefAgentSetup-X.Y.Z.exe` | `Tef.Agent` + `Tef.Agent.Setup` + `Tef.Agent.Tray` | [`installer/tefagent/build-installer.ps1`](installer/tefagent/build-installer.ps1) | dev, prod |
 | `PrintMonitorSetup-X.Y.Z.exe` | `PrintMonitor.{Service,Setup,Helper,Bootstrapper,Tray}` | [`installer/printmonitor/build-installer.ps1`](installer/printmonitor/build-installer.ps1) | dev, prod |
 | `BalancaAgentSetup-X.Y.Z.exe` | `Balanca.Agent` | [`installer/balanca/build-installer.ps1`](installer/balanca/build-installer.ps1) | prod |
+| `TotemSetup-X.Y.Z.exe` | `Totem.Agent` + `Totem.Setup` + `Totem.Shell` (publish no próprio script; WebView2 opcional, fora do CI) | [`installer/totem/build-installer.ps1`](installer/totem/build-installer.ps1) | dev, prod |
 
 A matriz é **[`installer/instaladores-ci.json`](installer/instaladores-ci.json)** — nunca o YAML.
 
@@ -39,8 +41,9 @@ workflows. Consequências:
 - Os docs **do que o instalador faz na estação** ficaram no backend, ao lado do código que provisiona:
   [`TefAgentInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/TefAgentInstalador.md),
   [`PrintMonitorInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/PrintMonitorInstalador.md),
-  [`BalancaAgentInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/BalancaAgentInstalador.md)
-  e as armadilhas **#78, #101, #104, #112** do `CLAUDE.md` de lá. **Leia o doc do agente antes de mexer
+  [`BalancaAgentInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/BalancaAgentInstalador.md),
+  [`TotemInstalacaoWindows.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/TotemInstalacaoWindows.md)
+  e as armadilhas **#78, #101, #104, #112, #119** do `CLAUDE.md` de lá. **Leia o doc do agente antes de mexer
   no `.iss` dele.**
 
 ## Estrutura
@@ -50,7 +53,7 @@ installer/
 ├── instaladores-ci.json        # matriz do CI por canal (fonte única; guarda InstaladoresCiArchitectureTests)
 ├── assets/sispedracaida.ico
 ├── common/                     # Empacotamento.psm1 (núcleo) + Pester + montar-instalador.ps1
-├── tefagent/  printmonitor/  balanca/   # .iss + includes + build-installer.ps1 (+ payloads fora do git)
+├── tefagent/  printmonitor/  balanca/  totem/   # .iss + includes + build-installer.ps1 (+ payloads fora do git)
 scripts/runner-windows-diagnostico.ps1   # pré-requisitos do runner Windows
 tests/SisPedraCaida.Instaladores.Tests/  # guardas .iss × C# do backend (xUnit, net10.0-windows)
 artifacts/installer/            # pacotes versionados à força (git add -f) — uma versão só

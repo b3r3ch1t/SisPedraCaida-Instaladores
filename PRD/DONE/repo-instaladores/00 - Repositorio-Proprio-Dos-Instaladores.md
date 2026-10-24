@@ -1,11 +1,11 @@
 # PRD-REPOINST-00 — Repositório próprio dos instaladores Windows
 
-> **Status:** Concluído — **Última atualização:** 23/10/2026 17:30
+> **Status:** Concluído — **Última atualização:** 24/10/2026 12:07
 
 ## Objetivo
 
 Tirar do `SisPedraCaida-Backend` os instaladores Inno Setup dos agentes de estação (TEF, PrintMonitor,
-balança), o núcleo de empacotamento, o manifesto da matriz, o diagnóstico do runner, as guardas `.iss`
+balança, totem), o núcleo de empacotamento, o manifesto da matriz, o diagnóstico do runner, as guardas `.iss`
 × C# e os workflows de empacotamento, e recriá-los aqui, sem perder nenhuma rotina de CI/CD existente.
 
 ## Decisões
@@ -26,6 +26,10 @@ balança), o núcleo de empacotamento, o manifesto da matriz, o diagnóstico do 
 - `installer/**`, `scripts/runner-windows-diagnostico.ps1`, `artifacts/installer/**` (pacotes versionados),
   `docs/RunnerWindowsInstaladores.md`, `docs/InstaladoresBuildLocalWindows.md`.
 - `Empacotamento.psm1`: `Resolve-RaizDoBackend` e `Get-ProcedenciaDosScripts` (+7 testes Pester, 60 no total, verdes no pwsh 7 e no 5.1).
+- Totem (`installer/totem/`, 24/10/2026): entrou no backend pelo PRD-TOTEM-04 (#1226) depois do corte
+  desta migração; `.iss` e includes vieram sem alteração, o `build-installer.ps1` ganhou o mesmo
+  `-BackendRoot`/dois SHAs dos outros três e a linha `totem` (canais dev e prod) entrou no manifesto. A
+  guarda do manifesto passa a exigir os 4 Windows services (`Totem.Agent` incluso).
 - `build-installer.ps1` (3): `-BackendRoot`, cadeia local × cadeia do backend, `.iss` e payloads deste checkout. Validado gerando `TefAgentSetup-3.17.0.exe` de `origin/dev` do backend.
 - Guardas: 57 testes (as 4 classes de guarda + 4 testes avulsos que estavam em classes de outro assunto no backend).
 - Workflows: `instaladores-windows.yml`, `instaladores-dev.yml`, `runner-windows-diagnostico.yml`, `commitlint.yml`, `ci.yml` (novo: PR).

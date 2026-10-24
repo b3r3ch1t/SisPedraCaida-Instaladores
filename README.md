@@ -1,7 +1,7 @@
 # SisPedraCaida-Instaladores
 
 Instaladores Windows (Inno Setup 6) dos agentes de estação do SisPedraCaida — agente TEF,
-PrintMonitor e agente da balança — e o pipeline que os gera a partir de um commit do
+PrintMonitor, agente da balança e totem de autoatendimento — e o pipeline que os gera a partir de um commit do
 [SisPedraCaida-Backend](https://github.com/b3r3ch1t/SisPedraCaida-Backend) e os publica nas releases
 deste repositório.
 
