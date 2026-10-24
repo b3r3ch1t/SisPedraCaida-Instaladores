@@ -1,0 +1,23 @@
+﻿SisPedraCaida PrintMonitor - avisos de software de terceiros
+=============================================================
+
+Este instalador redistribui, sem modificação, o instalador oficial do QZ Tray
+(qz-tray-<versão>-x86_64.exe), executado durante a instalação quando o QZ Tray
+ainda não está presente nesta estação.
+
+QZ Tray
+-------
+Copyright (c) QZ Industries, LLC.
+Licença: GNU Lesser General Public License, versão 2.1 (LGPL-2.1).
+Código-fonte: https://github.com/qzind/tray
+Texto da licença: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
+
+O QZ Tray é instalado em sua própria pasta (por padrão C:\Program Files\QZ Tray),
+com desinstalador próprio; os termos que acompanham a distribuição do QZ Tray,
+inclusive os do ambiente de execução Java (JRE) que ele traz embutido, valem
+para esses componentes e prevalecem sobre este resumo.
+
+O PrintMonitor apenas se comunica com o QZ Tray pela rede local da estação
+(porta 8182); ele não incorpora nem altera o código do QZ Tray.
+
+Ao prosseguir, você declara estar ciente destes termos.

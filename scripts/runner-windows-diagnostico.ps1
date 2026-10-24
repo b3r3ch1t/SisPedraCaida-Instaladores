@@ -1,0 +1,309 @@
+﻿<#
+.SYNOPSIS
+    Confere se uma máquina Windows está pronta para empacotar os instaladores do CI de prod.
+
+.DESCRIPTION
+    Pré-requisitos do runner `[self-hosted, windows, instaladores]` (PRD-INSTPROD-01), conferidos um
+    a um e com a correção ao lado. Roda em dois lugares:
+      - no workflow `runner-windows-diagnostico.yml`, já como o usuário do serviço do runner — que é
+        o que importa: o Inno instalado "por usuário" por quem preparou a máquina não existe para a
+        conta do serviço;
+      - direto na máquina, ANTES de registrar o runner, para não descobrir a falta no primeiro release.
+
+    Saída: uma linha por verificação (OK / AVISO / FALHA) e, no Actions, a mesma tabela no resumo do
+    job. Qualquer FALHA sai com código 1.
+
+    ⚠️ A verificação de caminho é a que mais importa e a menos óbvia: o worktree de cada instalador
+    materializa o repositório inteiro sob o diretório base, e o MSBuild segue preso a 260 caracteres
+    mesmo com `LongPathsEnabled` — com base longa o `dotnet publish` morre com
+    `MSB3030 … apphost.exe … not found` (reproduzido em 18/10/2026, PRD-INSTPROD-04).
+
+.PARAMETER BaseDir
+    Diretório sob o qual os worktrees serão criados. Padrão: `$env:RUNNER_TEMP` (no Actions) ou, fora
+    dele, `C:\actions-runner\_work\_temp` — o caminho do runner recomendado no runbook.
+
+.PARAMETER PayloadDir
+    Cache do instalador do QZ Tray. Padrão: `$env:PRINTMONITOR_PAYLOAD_DIR`.
+
+.PARAMETER DriversPayloadDir
+    Cache do instalador do driver da Bematech MP-4200 TH. Padrão:
+    `$env:PRINTMONITOR_DRIVERS_PAYLOAD_DIR`. Componente **obrigatório** desde o PRD-PMTRAY-02: sem ele
+    o build do PrintMonitor falha, diferente do QZ Tray, que só sai do pacote.
+
+.PARAMETER BackendRoot
+    Checkout do SisPedraCaida-Backend (SDK do `global.json` e projetos de `src/`). Padrão: a mesma
+    descoberta dos `build-installer.ps1` (`SISPEDRACAIDA_BACKEND`, `backend/`, repositório irmão).
+
+.PARAMETER ExigirPayload
+    Payload ausente vira FALHA (no CI os dois são necessários para o pacote do PrintMonitor). Sem o
+    switch, vira AVISO — útil para conferir a máquina antes de montar os caches, ou quando só se vai
+    empacotar o agente TEF e a balança, que não têm payload.
+
+.EXAMPLE
+    pwsh scripts/runner-windows-diagnostico.ps1 -PayloadDir C:\ci-cache\printmonitor-payload
+
+.EXAMPLE
+    pwsh scripts/runner-windows-diagnostico.ps1 -BaseDir D:\r\_work\_temp -ExigirPayload
+#>
+[CmdletBinding()]
+param(
+    [string] $BaseDir = '',
+    [string] $PayloadDir = '',
+    [string] $DriversPayloadDir = '',
+    [switch] $ExigirPayload,
+    [string] $BackendRoot = ''
+)
+
+$ErrorActionPreference = 'Stop'
+
+$repoRoot = [string](Resolve-Path (Join-Path $PSScriptRoot '..'))
+Import-Module (Join-Path (Join-Path $repoRoot 'installer') (Join-Path 'common' 'Empacotamento.psm1')) -Force
+
+# O SDK exigido (global.json) e os projetos de src/ são do BACKEND, que o workflow de diagnóstico
+# clona em `backend/`; o manifesto e o módulo de empacotamento são deste repositório.
+$backendRoot = Resolve-RaizDoBackend -RepoRoot $repoRoot -BackendRoot $BackendRoot
+
+if (-not $BaseDir) {
+    $BaseDir = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { 'C:\actions-runner\_work\_temp' }
+}
+if (-not $PayloadDir) { $PayloadDir = [string]$env:PRINTMONITOR_PAYLOAD_DIR }
+if (-not $DriversPayloadDir) { $DriversPayloadDir = [string]$env:PRINTMONITOR_DRIVERS_PAYLOAD_DIR }
+
+# Limite do MSBuild/Win32 sem prefixo \\?\: 260 com o terminador, ou seja, 259 caracteres úteis.
+$limiteCaminho = 259
+
+$resultados = New-Object System.Collections.Generic.List[object]
+
+<#
+.SYNOPSIS
+    Registra o resultado de uma verificação.
+.PARAMETER Item
+    O que foi conferido.
+.PARAMETER Estado
+    OK, AVISO ou FALHA.
+.PARAMETER Detalhe
+    O valor encontrado e, na falha, como corrigir.
+#>
+function Add-Resultado {
+    param([string] $Item, [ValidateSet('OK', 'AVISO', 'FALHA')] [string] $Estado, [string] $Detalhe)
+    $resultados.Add([pscustomobject]@{ Item = $Item; Estado = $Estado; Detalhe = $Detalhe })
+}
+
+<#
+.SYNOPSIS
+    Roda um executável e devolve a primeira linha da saída, ou $null se ele não existir/falhar.
+#>
+function Get-PrimeiraLinha {
+    param([string] $Exe, [string[]] $Argumentos)
+    try {
+        $saida = & $Exe @Argumentos 2>$null
+        if ($LASTEXITCODE -ne 0) { return $null }
+        return (($saida | Select-Object -First 1) -as [string]).Trim()
+    }
+    catch {
+        return $null
+    }
+}
+
+# ---------- sistema ----------
+
+$ehWindows = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
+if ($ehWindows -and [System.Environment]::Is64BitOperatingSystem) {
+    Add-Resultado 'Sistema operacional' 'OK' ([System.Environment]::OSVersion.VersionString)
+}
+else {
+    Add-Resultado 'Sistema operacional' 'FALHA' 'Exige Windows x64: o ISCC e os executáveis net10.0-windows só existem lá.'
+}
+
+$identidade = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+$ehAdmin = (New-Object System.Security.Principal.WindowsPrincipal $identidade).IsInRole(
+    [System.Security.Principal.WindowsBuiltInRole]::Administrator)
+Add-Resultado 'Conta em execução' $(if ($ehAdmin -and $env:GITHUB_ACTIONS) { 'AVISO' } else { 'OK' }) (
+    "$($identidade.Name)" + $(if ($ehAdmin -and $env:GITHUB_ACTIONS) { ' — administrador: empacotar não precisa de elevação; prefira NETWORK SERVICE.' } else { '' }))
+
+$longPaths = $null
+try {
+    $longPaths = (Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name LongPathsEnabled -ErrorAction Stop).LongPathsEnabled
+}
+catch { }
+if ($longPaths -eq 1) {
+    Add-Resultado 'LongPathsEnabled' 'OK' '1'
+}
+else {
+    # AVISO, não FALHA: com o runner num diretório curto o empacotamento passa sem ele (o limite que
+    # reprova é o do MSBuild, conferido abaixo). Ele protege a limpeza de worktree por Remove-Item,
+    # que percorre os PRDs de caminho comprido.
+    Add-Resultado 'LongPathsEnabled' 'AVISO' ("valor '$longPaths'. Corrija (admin): Set-ItemProperty " +
+        "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem LongPathsEnabled 1 -Type DWord")
+}
+
+# ---------- ferramentas ----------
+
+$versaoPwsh = $PSVersionTable.PSVersion
+$pwshExe = Get-Command pwsh -ErrorAction SilentlyContinue
+if ($pwshExe) {
+    Add-Resultado 'PowerShell 7 (pwsh)' 'OK' ((Get-PrimeiraLinha 'pwsh' @('-NoProfile', '-Command', '$PSVersionTable.PSVersion.ToString()')) + " ($($pwshExe.Source))")
+}
+else {
+    Add-Resultado 'PowerShell 7 (pwsh)' 'FALHA' "ausente (esta sessão: $versaoPwsh). winget install --id Microsoft.PowerShell --scope machine"
+}
+
+# O SDK é resolvido pelo global.json do repositório: rodar na raiz é o que prova que a versão
+# exigida está instalada, e não só "algum dotnet".
+Push-Location $backendRoot
+try {
+    $sdk = Get-PrimeiraLinha 'dotnet' @('--version')
+}
+finally {
+    Pop-Location
+}
+if ($sdk) {
+    Add-Resultado '.NET SDK (global.json)' 'OK' $sdk
+}
+else {
+    $exigido = ''
+    try { $exigido = (Get-Content (Join-Path $backendRoot 'global.json') -Raw | ConvertFrom-Json).sdk.version } catch { }
+    Add-Resultado '.NET SDK (global.json)' 'FALHA' "nenhum SDK compatível com $exigido. winget install --id Microsoft.DotNet.SDK.10 --scope machine"
+}
+
+$git = Get-PrimeiraLinha 'git' @('--version')
+if ($git) {
+    Add-Resultado 'Git' 'OK' $git
+    $longGit = Get-PrimeiraLinha 'git' @('config', '--global', '--get', 'core.longpaths')
+    if ($longGit -eq 'true') {
+        Add-Resultado 'git core.longpaths (global)' 'OK' 'true'
+    }
+    else {
+        # O job de empacotamento liga por GIT_CONFIG_*, mas o actions/checkout roda antes dele.
+        Add-Resultado 'git core.longpaths (global)' 'AVISO' "'$longGit' — git config --global core.longpaths true (como a conta do runner)"
+    }
+}
+else {
+    Add-Resultado 'Git' 'FALHA' 'ausente. winget install --id Git.Git --scope machine'
+}
+
+try {
+    $iscc = Resolve-IsccExecutavel
+    # O ISCC.exe não carrega versão no VersionInfo (sai 0.0.0.0): a única fonte é o cabeçalho que ele
+    # imprime ("Inno Setup 6 Command-Line Compiler"). /? sai com código ≠ 0, então não há checagem dele.
+    $cabecalho = ((& $iscc '/?' 2>&1) | Select-Object -First 1) -as [string]
+    $versaoIscc = ([string]$cabecalho).Trim()
+    $majorIscc = 0
+    if ($versaoIscc -match 'Inno Setup (\d+)') { $majorIscc = [int]$Matches[1] }
+    $idioma = Join-Path (Split-Path $iscc -Parent) 'Languages\BrazilianPortuguese.isl'
+    if ($majorIscc -ne 6) {
+        Add-Resultado 'Inno Setup (ISCC)' 'FALHA' "$iscc versão $versaoIscc — os .iss exigem o Inno Setup 6."
+    }
+    elseif (-not (Test-Path $idioma)) {
+        Add-Resultado 'Inno Setup (ISCC)' 'FALHA' "$iscc sem Languages\BrazilianPortuguese.isl (os .iss usam pt-BR). Reinstale com os idiomas."
+    }
+    else {
+        # A versão completa só existe na entrada de desinstalação (o cabeçalho diz apenas "6"), e o
+        # instalador do TEF exige 6.1+ (CreateDownloadPage/DownloadTemporaryFile do pré-requisito do HUB).
+        $pastaIscc = (Split-Path $iscc -Parent).TrimEnd('\')
+        $completa = $null
+        foreach ($chave in @(
+                'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1',
+                'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1',
+                'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1')) {
+            $entrada = Get-ItemProperty -Path $chave -ErrorAction SilentlyContinue
+            if ($entrada -and ([string]$entrada.InstallLocation).TrimEnd('\') -eq $pastaIscc) {
+                $completa = [string]$entrada.DisplayVersion
+                break
+            }
+        }
+        $versaoNum = $null
+        if ($completa -and [version]::TryParse($completa, [ref]$versaoNum) -and $versaoNum -lt [version]'6.1') {
+            Add-Resultado 'Inno Setup (ISCC)' 'FALHA' "$completa ($iscc) — o instalador do TEF exige 6.1+. winget upgrade --id JRSoftware.InnoSetup --scope machine"
+        }
+        elseif ($completa) {
+            Add-Resultado 'Inno Setup (ISCC)' 'OK' "$completa ($iscc)"
+        }
+        else {
+            Add-Resultado 'Inno Setup (ISCC)' 'AVISO' "$versaoIscc ($iscc) — versão completa não confirmada (sem entrada de desinstalação); o TEF exige 6.1+."
+        }
+    }
+}
+catch {
+    # Causa nº 1 aqui: o Inno foi instalado POR USUÁRIO (padrão do winget) por quem preparou a máquina,
+    # e a conta do serviço do runner não enxerga o %LOCALAPPDATA% de outra pessoa.
+    Add-Resultado 'Inno Setup (ISCC)' 'FALHA' ("não encontrado para $($identidade.Name). " +
+        'winget install --id JRSoftware.InnoSetup --scope machine')
+}
+
+$pester = Get-Module -ListAvailable Pester | Sort-Object Version -Descending | Select-Object -First 1
+if ($pester) {
+    Add-Resultado 'Pester' 'OK' "$($pester.Version) — roda os testes do Empacotamento.psm1 antes de empacotar"
+}
+else {
+    Add-Resultado 'Pester' 'FALHA' 'ausente (o Windows traz o 3.4 em C:\Program Files\WindowsPowerShell\Modules — foi removido?).'
+}
+
+# ---------- caminho dos worktrees ----------
+
+$manifesto = Get-Content (Join-Path (Join-Path $repoRoot 'installer') 'instaladores-ci.json') -Raw | ConvertFrom-Json
+$maiorServico = ($manifesto.instaladores | ForEach-Object { $_.servico.Length } | Measure-Object -Maximum).Maximum
+$projetos = @(Get-ChildItem -Path (Join-Path $backendRoot 'src') -Directory | Where-Object {
+        Test-Path (Join-Path $_.FullName "$($_.Name).csproj")
+    })
+$maiorProjeto = ($projetos | ForEach-Object { $_.Name.Length } | Measure-Object -Maximum).Maximum
+
+# Pior caso do MSBuild dentro do worktree do workflow (`<base>\<servico>-<sha7>\wt\...`): o assembly
+# de referência intermediário do projeto de nome mais longo, que é o caminho mais fundo do obj/.
+$piorCaso = $BaseDir.TrimEnd('\') + '\' + ('x' * $maiorServico) + '-0000000\wt\src\' + ('x' * $maiorProjeto) +
+    '\obj\Release\net10.0-windows\win-x64\refint\' + ('x' * $maiorProjeto) + '.dll'
+$folga = $limiteCaminho - $piorCaso.Length
+if ($folga -ge 20) {
+    Add-Resultado 'Caminho dos worktrees' 'OK' "base '$BaseDir': pior caso $($piorCaso.Length) de $limiteCaminho caracteres (folga $folga)."
+}
+elseif ($folga -ge 0) {
+    Add-Resultado 'Caminho dos worktrees' 'AVISO' ("base '$BaseDir': pior caso $($piorCaso.Length) de $limiteCaminho — " +
+        "folga de só $folga; um projeto de nome maior estoura. Use um diretório de runner mais curto.")
+}
+else {
+    Add-Resultado 'Caminho dos worktrees' 'FALHA' ("base '$BaseDir': pior caso $($piorCaso.Length) > $limiteCaminho. " +
+        'O dotnet publish falharia com MSB3030. Reinstale o runner num diretório curto (ex.: C:\actions-runner).')
+}
+
+# ---------- payloads do PrintMonitor ----------
+
+# São DOIS, e com consequências diferentes: sem o QZ Tray o instalador sai sem o componente; sem o
+# driver da Bematech o build FALHA (`Resolve-PayloadVerificado -Obrigatorio` + `#error` no .iss, desde
+# o PRD-PMTRAY-02). Até 22/10/2026 o diagnóstico só conferia o primeiro, e máquina "pronta" aqui ainda
+# reprovava o PrintMonitorSetup lá — a lacuna que o PRD-INSTDEV-04 fechou.
+$estadoSemPayload = if ($ExigirPayload) { 'FALHA' } else { 'AVISO' }
+
+$qz = Test-PayloadDoRunner -PayloadDir $PayloadDir -ArquivoHash 'payload.sha256' `
+    -Descricao 'o QZ Tray' -Variavel 'PRINTMONITOR_PAYLOAD_DIR' `
+    -EstadoSeAusente $estadoSemPayload -EfeitoSeAusente 'O pacote do PrintMonitor sairia sem o QZ Tray.'
+Add-Resultado 'Payload do QZ Tray' $qz.Estado $qz.Detalhe
+
+$driver = Test-PayloadDoRunner -PayloadDir $DriversPayloadDir -ArquivoHash 'driver.sha256' `
+    -Descricao 'o driver da Bematech MP-4200 TH' -Variavel 'PRINTMONITOR_DRIVERS_PAYLOAD_DIR' `
+    -EstadoSeAusente $estadoSemPayload -EfeitoSeAusente 'O build do PrintMonitor FALHA sem ele (obrigatório desde PRD-PMTRAY-02).'
+Add-Resultado 'Payload do driver Bematech' $driver.Estado $driver.Detalhe
+
+# ---------- saída ----------
+
+Write-Host ''
+Write-Host 'Runner Windows dos instaladores — diagnóstico' -ForegroundColor Cyan
+foreach ($r in $resultados) {
+    $cor = switch ($r.Estado) { 'OK' { 'Green' } 'AVISO' { 'Yellow' } default { 'Red' } }
+    Write-Host ('  [{0,-5}] {1,-28} {2}' -f $r.Estado, $r.Item, $r.Detalhe) -ForegroundColor $cor
+}
+
+if ($env:GITHUB_STEP_SUMMARY) {
+    $linhas = @('## Runner Windows dos instaladores', '', '| Estado | Verificação | Detalhe |', '|---|---|---|')
+    $linhas += $resultados | ForEach-Object { "| $($_.Estado) | $($_.Item) | $($_.Detalhe -replace '\|', '/') |" }
+    ($linhas -join "`n") | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+}
+
+$falhas = @($resultados | Where-Object Estado -eq 'FALHA').Count
+Write-Host ''
+if ($falhas -gt 0) {
+    Write-Host "$falhas verificação(ões) com FALHA — o runner NÃO está pronto." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host 'Runner pronto para empacotar os instaladores.' -ForegroundColor Green
+exit 0

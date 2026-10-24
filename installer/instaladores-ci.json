@@ -1,0 +1,38 @@
+{
+  "_comentario": "Fonte unica da matriz de instaladores do CI, por canal (PRD-INSTPROD-02/04 + PRD-INSTDEV-01). Todo projeto de src/ que se registra como Windows Service (UseWindowsService/AddWindowsService) precisa aparecer em 'instaladores[].projetos' ou, enquanto o instalador nao existe, em 'pendentes' com o PRD que o entrega. 'canais' diz em QUAIS canais o CI empacota a linha ('dev' e/ou 'prod'); 'prod' e obrigatorio em todas, porque e o canal de campo. Filtrar servico no YAML em vez de aqui criaria uma segunda fonte de verdade, cega a esta guarda. Cobrado por InstaladoresCiArchitectureTests.",
+  "instaladores": [
+    {
+      "servico": "tefagent",
+      "nome": "TefAgentSetup",
+      "script": "installer/tefagent/build-installer.ps1",
+      "projetos": ["SisPedraCaida.Tef.Agent"],
+      "payload": false,
+      "canais": ["dev", "prod"]
+    },
+    {
+      "servico": "printmonitor",
+      "nome": "PrintMonitorSetup",
+      "script": "installer/printmonitor/build-installer.ps1",
+      "projetos": ["SisPedraCaida.PrintMonitor.Service"],
+      "payload": true,
+      "canais": ["dev", "prod"]
+    },
+    {
+      "servico": "balanca",
+      "nome": "BalancaAgentSetup",
+      "script": "installer/balanca/build-installer.ps1",
+      "projetos": ["SisPedraCaida.Balanca.Agent"],
+      "payload": false,
+      "canais": ["prod"]
+    },
+    {
+      "servico": "totem",
+      "nome": "TotemSetup",
+      "script": "installer/totem/build-installer.ps1",
+      "projetos": ["SisPedraCaida.Totem.Agent"],
+      "payload": false,
+      "canais": ["dev", "prod"]
+    }
+  ],
+  "pendentes": []
+}

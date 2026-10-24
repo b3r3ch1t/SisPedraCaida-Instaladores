@@ -1,0 +1,5 @@
+# Binário de terceiro (instalador do QZ Tray) e o hash da versão empacotada ficam fora do git:
+# arquivo grande encarece todo clone e o hash muda a cada bump. A REGRA de verificação é o que
+# está versionado — em build-installer.ps1, que falha o build se o hash divergir.
+*.exe
+payload.sha256
