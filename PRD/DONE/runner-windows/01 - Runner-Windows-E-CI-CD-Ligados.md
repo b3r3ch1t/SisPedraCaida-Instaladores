@@ -1,6 +1,6 @@
 # PRD-RUNWIN-01 — Runner Windows registrado e CI/CD dos instaladores ligado
 
-> **Status:** Em andamento — **Última atualização:** 27/10/2026 08:40
+> **Status:** Concluído (pendência operacional no backend, abaixo) — **Última atualização:** 27/10/2026 09:05
 
 ## Objetivo
 
@@ -32,9 +32,20 @@ branch que o backend dispara no canal de produção.
   agora confere `core.longpaths` no `--system` e o `gh` (necessário ao `empacotar`).
 - `instaladores-windows.yml`: job `preparar`, upload direto do runner, `publicar` confere o que a release serve.
 
-## Pendente
+- PR #3 (`dev`) e promoção #4 (`dev` → `prod`, merge commit): a `prod` passou a ter os workflows.
+- Ensaios verdes, todos os jobs:
+  - canal dev da branch ([40496053193](https://github.com/b3r3ch1t/SisPedraCaida-Instaladores/actions/runs/40496053193))
+    e do push do merge na `dev` ([40498109142](https://github.com/b3r3ch1t/SisPedraCaida-Instaladores/actions/runs/40498109142)):
+    `dev-latest` trocou 4.1.0 por 4.1.1 sem sobrar asset antigo;
+  - canal prod, sem `sha` e sem `tag` ([40499402027](https://github.com/b3r3ch1t/SisPedraCaida-Instaladores/actions/runs/40499402027)):
+    `prod-latest` com Balanca, PrintMonitor, TefAgent e Totem 3.19.5.
+- `INSTALADORES_WINDOWS=true` neste repositório.
 
-- Ensaio verde do canal dev com o fluxo novo.
-- `INSTALADORES_WINDOWS=true` aqui e no backend.
-- Segredo `INSTALADORES_DISPATCH_TOKEN` no backend (criado pelo dono da conta; Actions: write aqui).
-- Promoção `dev` → `prod` deste repositório (a `prod` não tem workflow nenhum).
+## Pendência operacional (backend)
+
+1. Segredo `INSTALADORES_DISPATCH_TOKEN` no SisPedraCaida-Backend (token fine-grained, Actions: write só
+   neste repositório) — runbook §6.1.
+2. Só depois dele, `INSTALADORES_WINDOWS=true` no backend: liga os disparos de push na `dev` (agentes) e na
+   `prod` (release-please-prod, job `instaladores`). Ligar antes deixaria esses jobs vermelhos.
+3. Recomendado: retenção curta do `coverage-report` no `tests-coverage.yml` do backend (hoje 90 dias,
+   ~1,3 GB) — é ele que esgota a cota de artifacts da conta.
