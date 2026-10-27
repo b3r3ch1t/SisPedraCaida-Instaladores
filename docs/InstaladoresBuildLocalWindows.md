@@ -36,7 +36,7 @@ outra coisa (conta de serviço, ACL, registro do runner), abra
 | **.NET SDK 10** | `winget install --id Microsoft.DotNet.SDK.10 --scope machine` | `dotnet publish` dos projetos. A versão é resolvida pelo [`global.json`](../global.json) (`10.0.300`, `rollForward: latestMinor`) — o diagnóstico roda `dotnet --version` **na raiz do repo**, que é o que prova a compatibilidade, e não só "existe algum dotnet" |
 | **Inno Setup 6.1+** | `winget install --id JRSoftware.InnoSetup --scope machine` | compila os `.iss`. **6.1 é piso**, não preferência: o instalador do TEF usa `CreateDownloadPage`/`DownloadTemporaryFile` para o pré-requisito do Elgin TEF HUB |
 | ↳ **`BrazilianPortuguese.isl`** | reinstalar o Inno com os idiomas | os três `.iss` declaram pt-BR; sem o arquivo o ISCC reprova |
-| **PowerShell 7 (`pwsh`)** | `winget install --id Microsoft.PowerShell --scope machine` | os `build-installer.ps1` e o [`Empacotamento.psm1`](../installer/common/Empacotamento.psm1). O 5.1 que vem no Windows **não serve** — ver §4 |
+| **PowerShell 7 (`pwsh`)** | MSI da release oficial (`PowerShell-X.Y.Z-win-x64.msi`) — **não** `winget … --scope machine`, que é MSIX e remove o pwsh da Store (armadilha r) | os `build-installer.ps1` e o [`Empacotamento.psm1`](../installer/common/Empacotamento.psm1). O 5.1 que vem no Windows **não serve** — ver §4 |
 | **Git for Windows** | `winget install --id Git.Git --scope machine` | o script materializa o repositório **inteiro** num worktree |
 | ↳ `git config --global core.longpaths true` | como a conta que vai buildar | sem isso o `git worktree add` morre com `Filename too long` nos PRDs de caminho comprido |
 | **`LongPathsEnabled = 1`** | `Set-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem LongPathsEnabled 1 -Type DWord` (admin) | não é bloqueante com clone curto, mas protege a limpeza do worktree por `Remove-Item` |
@@ -82,7 +82,7 @@ Numa máquina de desenvolvimento ainda sem as duas ferramentas (medido em 22/10/
 Runner Windows dos instaladores — diagnóstico
   [OK   ] Sistema operacional          Microsoft Windows NT 10.0.26300.0
   [OK   ] LongPathsEnabled             1
-  [FALHA] PowerShell 7 (pwsh)          ausente (esta sessão: 5.1.26100.9711). winget install --id Microsoft.PowerShell --scope machine
+  [FALHA] PowerShell 7 (pwsh)          ausente (esta sessão: 5.1.26100.9711). MSI da release oficial (PowerShell-X.Y.Z-win-x64.msi) ou scripts\preparar-runner-windows.ps1 — NÃO o winget de máquina (MSIX; armadilha r)
   [OK   ] .NET SDK (global.json)       10.0.402
   [OK   ] Git                          git version 2.56.0.windows.2
   [OK   ] git core.longpaths (global)  true
