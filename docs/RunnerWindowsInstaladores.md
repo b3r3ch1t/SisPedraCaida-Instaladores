@@ -1,6 +1,8 @@
 # Runner Windows dos instaladores — runbook
 
-> **Última atualização:** 27/10/2026 08:45 (horário local) — **runner registrado** (`instaladores-win-01`,
+> **Última atualização:** 27/10/2026 16:40 (horário local) — **terceiro payload: bootstrapper do WebView2
+> do totem** (PRD-TOTEMINST-02, §5.3) e payloads **declarados no manifesto** (`installer/instaladores-ci.json`,
+> campo `payloads`): o job `empacotar` e o diagnóstico só iteram a lista. Antes (27/10/2026 08:45): **runner registrado** (`instaladores-win-01`,
 > PRD-RUNWIN-01): §3 ganhou o `scripts/preparar-runner-windows.ps1` e a armadilha do pwsh via winget/MSIX;
 > pacotes publicados sem artifact (release móvel `prod-latest` para prod sem tag). Antes (23/10/2026 17:30): **mudou de repositório**: runner,
 > variáveis, segredos e workflows passaram para o **SisPedraCaida-Instaladores** (§4, §6). O backend só
@@ -99,18 +101,27 @@ caso fica em ~190.
 4. Confira em **Settings → Actions → Runners**: `instaladores-win-01` **Idle**, com os labels
    `self-hosted, Windows, X64, instaladores`.
 
-## 5. Payloads do PrintMonitor (dois)
+## 5. Payloads (três)
 
-O `PrintMonitorSetup` embute **dois** binários de terceiro, nenhum deles versionado, cada um na sua
-pasta e com o seu arquivo de hash — e com **consequências diferentes** se faltarem:
+Dois instaladores embutem binários de terceiro, nenhum deles versionado, cada um na sua pasta de cache
+e com o seu arquivo de hash. **No CI todo payload é obrigatório:** o job `empacotar` reprova o serviço
+com "Payload ausente" em vez de gerar pacote de campo incompleto.
 
-| Payload | Pasta / hash | Variável no CI | Sem ele |
-|---|---|---|---|
-| **QZ Tray** | [`installer/printmonitor/payload/`](../installer/printmonitor/payload/README.md) · `payload.sha256` | `PRINTMONITOR_PAYLOAD_DIR` | o instalador **sai sem** o componente |
-| **Driver Bematech MP-4200 TH** | [`installer/printmonitor/payload-drivers/`](../installer/printmonitor/payload-drivers/README.md) · `driver.sha256` | `PRINTMONITOR_DRIVERS_PAYLOAD_DIR` | o **build falha** (`Resolve-PayloadVerificado -Obrigatorio` + `#error` no `.iss`, desde o PRD-PMTRAY-02) |
+| Payload | Instalador | Pasta / hash | Variável no CI | Sem ele, no build local |
+|---|---|---|---|---|
+| **QZ Tray** | PrintMonitor | [`installer/printmonitor/payload/`](../installer/printmonitor/payload/README.md) · `payload.sha256` | `PRINTMONITOR_PAYLOAD_DIR` | o instalador **sai sem** o componente |
+| **Driver Bematech MP-4200 TH** | PrintMonitor | [`installer/printmonitor/payload-drivers/`](../installer/printmonitor/payload-drivers/README.md) · `driver.sha256` | `PRINTMONITOR_DRIVERS_PAYLOAD_DIR` | o **build falha** (`Resolve-PayloadVerificado -Obrigatorio` + `#error` no `.iss`, desde o PRD-PMTRAY-02) |
+| **Bootstrapper do WebView2 Runtime** | totem | [`installer/totem/payload-webview2/`](../installer/totem/payload-webview2/README.md) · `webview2.sha256` | `TOTEM_WEBVIEW2_PAYLOAD_DIR` | o instalador **sai sem** o runtime: em Windows sem ele a tela do totem fica "fora de serviço" |
 
-As pastas são separadas de propósito: a do QZ aceita **um único** `.exe` e o build recusa
-ambiguidade. O diagnóstico confere os dois (§6) desde o PRD-INSTDEV-04.
+**A lista é o manifesto**, não este runbook nem o YAML: cada linha de `installer/instaladores-ci.json` tem
+`payloads` com o parâmetro do `build-installer.ps1`, a variável, o arquivo de hash e o efeito da ausência.
+O job `empacotar` e o diagnóstico (§6) só iteram essa lista (PRD-TOTEMINST-02). Payload novo = linha no
+manifesto **e** a variável no `env:` dos dois workflows (`instaladores-windows.yml` e
+`runner-windows-diagnostico.yml`): o contexto `vars` não é enumerável, e a guarda
+`TodaVariavelDePayload_EstaNosDoisWorkflows` cobra a linha.
+
+As pastas são separadas de propósito: cada uma aceita **um único** `.exe` e o build recusa
+ambiguidade.
 
 ### 5.1 Cache do QZ Tray
 
@@ -152,6 +163,32 @@ E a variável **`PRINTMONITOR_DRIVERS_PAYLOAD_DIR`** = `C:\ci-cache\printmonitor
 assinatura, com `Get-AuthenticodeSignature` antes de trocar o arquivo (o certificado expirou em 2019,
 mas a assinatura tem carimbo de tempo).
 
+### 5.3 Cache do bootstrapper do WebView2 (totem)
+
+O `MicrosoftEdgeWebview2Setup.exe` é o *Evergreen Bootstrapper* oficial da Microsoft (cerca de 2 MB): na
+estação ele baixa o runtime atual, só quando a máquina não o tem. A Microsoft não publica SHA-256 dele, então
+a procedência é a **assinatura Authenticode**, conferida antes de gravar o hash:
+
+```powershell
+$pasta = 'C:\ci-cache\totem-webview2'
+New-Item -ItemType Directory $pasta -Force | Out-Null
+$exe = Join-Path $pasta 'MicrosoftEdgeWebview2Setup.exe'
+Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $exe
+Get-AuthenticodeSignature $exe   # Status Valid, SignerCertificate.Subject com CN=Microsoft Corporation
+"$((Get-FileHash $exe -Algorithm SHA256).Hash.ToLower())  MicrosoftEdgeWebview2Setup.exe" |
+  Set-Content (Join-Path $pasta 'webview2.sha256') -Encoding ascii
+icacls $pasta /grant "NT AUTHORITY\NETWORK SERVICE:(OI)(CI)RX"
+```
+
+E a variável **`TOTEM_WEBVIEW2_PAYLOAD_DIR`** = `C:\ci-cache\totem-webview2`. O
+[`preparar-runner-windows.ps1`](../scripts/preparar-runner-windows.ps1) já dá a leitura nessa pasta
+(`-WebView2PayloadDir`). A receita comentada está no
+[`README.md` da pasta](../installer/totem/payload-webview2/README.md).
+
+⚠️ **Crie o cache e a variável antes de mesclar na `dev`** qualquer mudança que torne o payload obrigatório
+(foi o caso do PRD-TOTEMINST-02): o push dispara o `instaladores-dev.yml`, e sem a variável o job do totem
+reprova. Os outros serviços seguem empacotando (`fail-fast: false`).
+
 ## 6. Diagnosticar e ligar
 
 1. **Actions → Runner Windows - diagnóstico (instaladores) → Run workflow**
@@ -168,8 +205,11 @@ mas a assinatura tem carimbo de tempo).
    | Inno Setup (ISCC) | ausente, abaixo da **6.1** (o TEF usa `CreateDownloadPage`), ou sem `BrazilianPortuguese.isl` |
    | Pester | ausente (o Windows traz o 3.4; os testes do `Empacotamento.psm1` rodam antes de empacotar) |
    | Caminho dos worktrees | o pior caminho do MSBuild sob `RUNNER_TEMP` passa de 259 caracteres |
-   | Payload do QZ Tray | variável/pasta ausente, ≠ 1 `.exe`, sem `payload.sha256` ou hash divergente |
-   | Payload do driver Bematech | idem, com `driver.sha256` (PRD-INSTDEV-04) |
+   | Payload (printmonitor): o QZ Tray | variável/pasta ausente, ≠ 1 `.exe`, sem `payload.sha256` ou hash divergente |
+   | Payload (printmonitor): o driver da Bematech | idem, com `driver.sha256` (PRD-INSTDEV-04) |
+   | Payload (totem): o bootstrapper do WebView2 | idem, com `webview2.sha256` (PRD-TOTEMINST-02) |
+
+   As linhas de payload saem do manifesto: uma por item de `payloads`, na ordem das linhas.
 
    `LongPathsEnabled` e `core.longpaths` saem como AVISO. **Ausência** de payload só é FALHA com
    `-ExigirPayload` (o que o workflow passa); sem o switch vira AVISO, para conferir a máquina antes
@@ -179,8 +219,12 @@ mas a assinatura tem carimbo de tempo).
    ```powershell
    pwsh scripts/runner-windows-diagnostico.ps1 -BackendRoot ..\SisPedraCaida-Backend `
      -PayloadDir C:\ci-cache\printmonitor-payload `
-     -DriversPayloadDir C:\ci-cache\printmonitor-drivers
+     -DriversPayloadDir C:\ci-cache\printmonitor-drivers `
+     -WebView2PayloadDir C:\ci-cache\totem-webview2
    ```
+
+   Os três parâmetros de pasta são só overrides: sem eles, cada pasta vem da variável que o manifesto
+   declara (`PRINTMONITOR_PAYLOAD_DIR`, `PRINTMONITOR_DRIVERS_PAYLOAD_DIR`, `TOTEM_WEBVIEW2_PAYLOAD_DIR`).
 
 2. Com o diagnóstico verde, crie a variável **`INSTALADORES_WINDOWS`** = `true` **nos dois
    repositórios** (aqui liga o `instaladores-dev.yml`; no backend, os disparos de §6.4). A partir daí
@@ -229,6 +273,7 @@ falha de instalador nunca encostou no deploy das imagens.
 | Release saiu sem algum instalador | o run **deste repositório** fica vermelho no job que falhou; corrija e **reemita**: `Instaladores Windows` (branch `prod`) com `sha` = commit do release no backend e `tag` = `prod-vX.Y.Z` (os anexos são substituídos) |
 | Nova versão do QZ Tray | troque o `.exe` e o `payload.sha256` em `C:\ci-cache\printmonitor-payload` e rode o diagnóstico |
 | Nova versão do driver Bematech | troque o `.exe` e o `driver.sha256` em `C:\ci-cache\printmonitor-drivers`, atualize o `README.md` da pasta (hash e assinatura) e rode o diagnóstico |
+| Novo bootstrapper do WebView2 | baixe de novo pela §5.3, confira a assinatura, troque o `.exe` e o `webview2.sha256` em `C:\ci-cache\totem-webview2` e rode o diagnóstico |
 | Novo SDK / Inno | atualize com `winget upgrade … --scope machine` e rode o diagnóstico |
 | Disco enchendo | `RUNNER_TEMP` é limpo pelo runner a cada job; os worktrees são removidos pelo próprio script. Para run cancelado no meio, uma tarefa agendada semanal com `git -C C:\actions-runner\_work\SisPedraCaida-Instaladores\SisPedraCaida-Instaladores\backend worktree prune` |
 | Segundo runner | registre outro com o mesmo label `instaladores`: os três empacotamentos passam a rodar em paralelo, sem mudar o workflow (cada um já usa o seu worktree) |

@@ -4,8 +4,8 @@ using Xunit;
 namespace SisPedraCaida.Instaladores.Tests;
 
 /// <summary>
-/// Política de <b>upgrade por instalador</b> comum aos instaladores Inno dos agentes Windows do balcão — TEF e
-/// PrintMonitor (PRD-PMTRAY-03, armadilha #101).
+/// Política de <b>upgrade por instalador</b> comum aos instaladores Inno dos agentes Windows do balcão — TEF,
+/// PrintMonitor (PRD-PMTRAY-03, armadilha #101) e totem (PRD-TOTEMINST-01).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -20,6 +20,11 @@ namespace SisPedraCaida.Instaladores.Tests;
 /// <c>--uninstall</c> dele apaga as variáveis de máquina — também é travada aqui, para ninguém "alinhar" o
 /// PrintMonitor ao TEF e apagar a chave das estações no próximo upgrade.
 /// </para>
+/// <para>
+/// O totem segue o PrintMonitor (upgrade no lugar, sem o desinstalador anterior): o <c>--uninstall</c> dele
+/// restaura as políticas da sessão e remove o serviço. As decisões próprias dele estão em
+/// <c>TotemUpgradeGuardTests</c>.
+/// </para>
 /// </remarks>
 [Trait("Category", "Architecture")]
 public class InstaladoresUpgradeArchitectureTests
@@ -29,6 +34,7 @@ public class InstaladoresUpgradeArchitectureTests
     {
         { "tefagent", "TefAgent.iss" },
         { "printmonitor", "PrintMonitor.iss" },
+        { "totem", "Totem.iss" },
     };
 
     /// <summary>AppId fixo, binários com ignoreversion, Inno sem fechar processos por conta própria.</summary>

@@ -1,0 +1,5 @@
+# Bootstrapper do WebView2 Runtime (binário da Microsoft) e o hash da cópia empacotada ficam fora do
+# git, como os payloads do PrintMonitor. A REGRA de verificação é o que está versionado: o
+# build-installer.ps1 do totem confere o webview2.sha256 e falha o build se divergir.
+*.exe
+webview2.sha256

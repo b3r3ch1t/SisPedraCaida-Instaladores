@@ -39,6 +39,10 @@
 .PARAMETER DriversPayloadDir
     Cache do driver Bematech. Padrão `C:\ci-cache\printmonitor-drivers`.
 
+.PARAMETER WebView2PayloadDir
+    Cache do bootstrapper do WebView2 Runtime do totem. Padrão `C:\ci-cache\totem-webview2`
+    (PRD-TOTEMINST-02; receita em `installer/totem/payload-webview2/README.md`).
+
 .PARAMETER PwshVersion
     Versão do PowerShell 7 instalada pelo MSI da release oficial. Padrão `7.6.9`.
 
@@ -53,6 +57,7 @@ param(
     [string] $Repositorio = 'b3r3ch1t/SisPedraCaida-Instaladores',
     [string] $PayloadDir = 'C:\ci-cache\printmonitor-payload',
     [string] $DriversPayloadDir = 'C:\ci-cache\printmonitor-drivers',
+    [string] $WebView2PayloadDir = 'C:\ci-cache\totem-webview2',
     [string] $PwshVersion = '7.6.9'
 )
 
@@ -133,7 +138,7 @@ if ($LASTEXITCODE -ne 0) { throw 'git config --system core.longpaths falhou.' }
 
 # ---- 3. Caches de payload legíveis pela conta do serviço ----
 Write-Etapa "Permissão de leitura nos caches para $contaServico"
-foreach ($pasta in $PayloadDir, $DriversPayloadDir) {
+foreach ($pasta in $PayloadDir, $DriversPayloadDir, $WebView2PayloadDir) {
     if (-not (Test-Path $pasta)) { Write-Warning "Cache ausente, pulando: $pasta"; continue }
     & icacls $pasta /grant "*S-1-5-20:(OI)(CI)RX" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "icacls falhou em $pasta." }
