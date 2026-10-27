@@ -1,6 +1,6 @@
 # PRD-TOTEMINST-03 — Documentação cruzada e sincronização
 
-> **Status:** Em andamento — §1, §3 e as pendências feitas; falta mesclar a #1275 do backend depois do merge da #8 — **Última atualização:** 27/10/2026 17:35
+> **Status:** Concluído — **Última atualização:** 27/10/2026 17:55
 
 ## Objetivo
 
@@ -72,9 +72,9 @@ Cabeçalho final do épico: data, "épico `totem-instalador`", link para `PRD/DO
 | Item | Estado |
 |---|---|
 | §1 — backend: `/CONTEUDOURL=` no runbook | [b3r3ch1t/SisPedraCaida-Backend#1272](https://github.com/b3r3ch1t/SisPedraCaida-Backend/pull/1272) **mesclada** (15:09 UTC) |
-| §2 — backend: §1 e §6 do runbook dizem que o pacote do CI traz o WebView2 | [b3r3ch1t/SisPedraCaida-Backend#1275](https://github.com/b3r3ch1t/SisPedraCaida-Backend/pull/1275) **aberta**; mesclar depois da PR deste épico e do primeiro `TotemSetup` com WebView2 em `dev-latest` |
+| §2 — backend: §1 e §6 do runbook dizem que o pacote do CI traz o WebView2 | [b3r3ch1t/SisPedraCaida-Backend#1275](https://github.com/b3r3ch1t/SisPedraCaida-Backend/pull/1275) **mesclada** (15:33:20 UTC, 17 s antes da #8 deste repositório; o run da `dev` confirmou depois o pacote que ela descreve) |
 | §3 — `C:\repos\SisPedraCaida\CLAUDE.md` | feito: totem na tabela, callout com as guardas, o runbook como contrato e o WebView2/`payloads` |
-| §4 — `CLAUDE.md` deste repositório | cabeçalho do PRD-01 e do PRD-02 feitos; o do fechamento entra com o master em `DONE` |
+| §4 — `CLAUDE.md` deste repositório | feito: cabeçalhos do PRD-01, do PRD-02 e do fechamento do épico |
 | Pendência 1 — clones locais | feito: `SisPedraCaida-Instaladores` saiu da `fix/permissoes-instaladores-dev` para a `dev`; `SisPedraCaida-Backend` avançou 43 commits na `dev` (`pull --ff-only`). A pasta não versionada `src/SisPedraCaida.Balanca.Agent/Properties/` do backend foi preservada |
 | Pendência 2 — cache e variável no runner | **feita** (PRD-02): cache montado pelo próprio runner (o runner roda na `PC_ANDERSON`), variável criada, diagnóstico verde |
 | Pendência 3 — herdadas do PRD-RUNWIN-01 | só citadas, como previsto |
