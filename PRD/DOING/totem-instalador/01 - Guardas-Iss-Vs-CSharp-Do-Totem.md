@@ -1,6 +1,6 @@
 # PRD-TOTEMINST-01 — Guardas `.iss` × C# do totem
 
-> **Status:** Planejado — **Última atualização:** 27/10/2026 14:57
+> **Status:** Em andamento — código e testes prontos; falta o `ci.yml` verde no PR, que depende do backend #1272 — **Última atualização:** 27/10/2026 15:55
 
 ## Objetivo
 
@@ -96,3 +96,32 @@ Pasta do instalador: `installer/totem`. Helper `Ler(arquivo)` igual ao das outra
 
 3. `pwsh installer/common/Invoke-TestesEmpacotamento.ps1` sem regressão (o módulo não muda).
 4. `ci.yml` verde no PR: o `windows-latest` compila `Totem.Agent` e `Totem.Setup` a partir da `dev` do backend.
+
+## Entregue (27/10/2026)
+
+- Pré-requisito no backend: PR [b3r3ch1t/SisPedraCaida-Backend#1272](https://github.com/b3r3ch1t/SisPedraCaida-Backend/pull/1272)
+  (`docs/totem-conteudourl`), com a tabela dos quatro parâmetros do silencioso no runbook. **Aberta, não mesclada.**
+- `ProjectReference` a `Totem.Agent` e `Totem.Setup`. O plano B (D4) não foi necessário: compila e roda.
+- `Totem/TotemInnoGuardTests.cs`: 14 métodos, 21 casos com os vetores da normalização. Além do previsto, o teste
+  dos parâmetros do Setup simula a linha que o `.iss` monta (`--nome "AUTO-02"`, `--conteudo-url=`) e confere que o
+  `LinhaDeComando` a lê sem argumento desconhecido; o dos parâmetros do Inno confere o par
+  `/APIURL=` → `--api-url` (e os outros três) pela variável que liga os dois.
+- `Totem/TotemUpgradeGuardTests.cs`: 4 testes. O AppId também não pode aparecer no `BalancaAgent.iss`.
+- `{ "totem", "Totem.iss" }` na `TheoryData` de `InstaladoresUpgradeArchitectureTests` (+3 casos).
+- Resultado: guardas **85/85** (eram 57) contra o backend `origin/dev` + #1272; Pester **60/60**.
+
+### Prova por mutação (revertida)
+
+| Mutação | Reprovou |
+|---|---|
+| `#define ServicoNome` com outro valor | `NomeDoServico_…` |
+| `if Codigo = 2` → `= 4` | `CodigosDeSaida_…` |
+| Rota da sonda `enrolment` | `RotaDaSonda_…` |
+| `restartreplace` removido | `FechamentoPorCaminho_…` |
+| `'--conteudo-url'` → `'--conteudourl'` | `ParametrosDoSetup_…` e `ParametrosDoInno_…` (os dois leem o parâmetro) |
+| Runbook do backend sem `/CONTEUDOURL=` | `ParametrosDoInno_…` |
+| AppId trocado no `Totem.iss` | `AppId_…` |
+| `PrepararUpgrade` chamando `--uninstall` | `PrepareToInstall_…` |
+
+⚠️ Até o #1272 mesclar, o `ci.yml` deste PR reprova `ParametrosDoInno_NoIss_SaoOsDocumentadosNoBackend`: ele roda
+contra a `dev` do backend, que ainda não documenta `/CONTEUDOURL=`.

@@ -1,6 +1,8 @@
 # SisPedraCaida-Instaladores — Guia
 
-> **Última atualização deste CLAUDE.md:** 27/10/2026 08:45 (horário local, UTC-3) — runner Windows registrado e
+> **Última atualização deste CLAUDE.md:** 27/10/2026 15:55 (horário local, UTC-3) — guardas `.iss` × C# do
+> **totem** (PRD-TOTEMINST-01, `tests/…/Totem/`) e totem na política de upgrade comum · antes (27/10/2026 08:45):
+> runner Windows registrado e
 > CI/CD ligado (PRD-RUNWIN-01): armadilhas **(r)** pwsh via MSI e **(s)** pacote sem artifact, release móvel
 > `prod-latest` · antes (24/10/2026 13:50): armadilha **(q)**:
 > `startup_failure` por permissão do `GITHUB_TOKEN` · antes (24/10/2026 12:07): instalador do
@@ -20,7 +22,7 @@ pipeline que os gera e publica. Comunicação, docs, commits e PRDs em **portugu
 | `TefAgentSetup-X.Y.Z.exe` | `Tef.Agent` + `Tef.Agent.Setup` + `Tef.Agent.Tray` | [`installer/tefagent/build-installer.ps1`](installer/tefagent/build-installer.ps1) | dev, prod |
 | `PrintMonitorSetup-X.Y.Z.exe` | `PrintMonitor.{Service,Setup,Helper,Bootstrapper,Tray}` | [`installer/printmonitor/build-installer.ps1`](installer/printmonitor/build-installer.ps1) | dev, prod |
 | `BalancaAgentSetup-X.Y.Z.exe` | `Balanca.Agent` | [`installer/balanca/build-installer.ps1`](installer/balanca/build-installer.ps1) | prod |
-| `TotemSetup-X.Y.Z.exe` | `Totem.Agent` + `Totem.Setup` + `Totem.Shell` (publish no próprio script; WebView2 opcional, fora do CI) | [`installer/totem/build-installer.ps1`](installer/totem/build-installer.ps1) | dev, prod |
+| `TotemSetup-X.Y.Z.exe` | `Totem.Agent` + `Totem.Setup` + `Totem.Shell` (publish no próprio script; WebView2 opcional, fora do CI; guardas em `tests/…/Totem/`) | [`installer/totem/build-installer.ps1`](installer/totem/build-installer.ps1) | dev, prod |
 
 A matriz é **[`installer/instaladores-ci.json`](installer/instaladores-ci.json)** — nunca o YAML.
 
@@ -41,6 +43,10 @@ workflows. Consequências:
   Helper, URL do dashboard) é **um PR em cada repositório**: backend primeiro, depois o `.iss` aqui. As
   guardas de `tests/` pegam a divergência — mas só quando rodam contra o backend novo (CI de PR usa a
   `dev` do backend; o `testar` do empacotamento usa o SHA exato).
+- O projeto de testes referencia do backend `PrintMonitor.{Core,Infrastructure,Helper,Setup}` e
+  `Totem.{Agent,Setup}` — **nunca** `Totem.Shell` nem outra casca WinForms (#104a do backend). A guarda
+  `ParametrosDoInno_NoIss_SaoOsDocumentadosNoBackend` lê também o `docs/TotemInstalacaoWindows.md` de lá:
+  parâmetro novo do `TotemSetup` entra primeiro no runbook do backend.
 - Os docs **do que o instalador faz na estação** ficaram no backend, ao lado do código que provisiona:
   [`TefAgentInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/TefAgentInstalador.md),
   [`PrintMonitorInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/PrintMonitorInstalador.md),
