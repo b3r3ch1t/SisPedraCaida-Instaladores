@@ -1,0 +1,503 @@
+name: Instaladores Windows
+
+# Gera os instaladores dos Windows services a partir de um commit exato do BACKEND, cada um num
+# WORKTREE SEPARADO, e os publica nas releases DESTE repositório conforme o canal. Épicos
+# ci-instaladores-prod (PRD-INSTPROD-04) e ci-instaladores-dev (PRD-INSTDEV-02/03), trazidos do
+# SisPedraCaida-Backend quando os instaladores ganharam repositório próprio (23/10/2026).
+#
+# DUAS PROCEDÊNCIAS: o código dos agentes vem do commit `sha` do backend (input); o `.iss`, os includes
+# e os scripts vêm do commit deste repositório em que o run foi disparado (`github.sha`). As duas vão
+# para o resumo do job e para as notas da release.
+#
+# QUEM CHAMA:
+#   - o backend, por `gh workflow run` (workflow_dispatch) com o token INSTALADORES_DISPATCH_TOKEN:
+#       · release-please-prod.yml → `--ref prod -f canal=prod -f sha -f versao -f tag`, no push da prod;
+#       · instaladores-dev.yml    → `--ref dev  -f canal=dev  -f sha`, no push da dev que toca os agentes.
+#     Cruzar repositório por `workflow_call` não é possível: o reusable de um repo privado só é
+#     chamável do mesmo repositório (ou de outro com acesso concedido pela organização — conta pessoal
+#     não tem essa opção).
+#   - instaladores-dev.yml DESTE repositório (workflow_call), quando o que muda é o instalador.
+#   - workflow_dispatch manual, para ensaio e para reemitir os pacotes de uma release.
+#
+# Decisões do épico que moldam este arquivo:
+#   D1 — o ISCC (Inno Setup) só existe no Windows: o empacotamento roda no runner self-hosted
+#        `[self-hosted, windows, instaladores]`, registrado NESTE repositório (conta pessoal: runner é
+#        por repositório). Os jobs leves (matriz, publicação) rodam no hospedado `ubuntu-latest` — os
+#        runners Linux `[self-hosted, sispedracaida]` estão registrados só nos outros três repos.
+#   D3 — falha de instalador deixa o run VERMELHO, mas não bloqueia o deploy das imagens do backend,
+#        que é outro workflow, em outro repositório.
+#   D4 — push sem release também gera os instaladores, na release móvel `prod-latest` (pré-lançamento).
+#
+# SEM ARTIFACT DO ACTIONS (27/10/2026): os `.exe` vão do runner Windows DIRETO para a release de destino
+# (`gh release upload` no job `empacotar`). Artifact conta na cota de armazenamento da CONTA — compartilhada
+# com os outros repositórios privados — e cada run da dev pesava ~350 MB (o PrintMonitor sozinho ~200 MB):
+# o primeiro ensaio reprovou com "Artifact storage quota has been hit" com os três pacotes já gerados.
+# Asset de release não entra nessa cota. Destinos, resolvidos pelo job `matriz`:
+#   - canal dev                → `dev-latest`   (móvel, pré-lançamento);
+#   - canal prod, sem tag      → `prod-latest`  (móvel, pré-lançamento);
+#   - canal prod, com tag      → `prod-vX.Y.Z`  (a release de campo).
+#
+# SEGREDO: `SISPEDRACAIDA_BACKEND_TOKEN` — token com `contents: read` no SisPedraCaida-Backend (privado:
+# o GITHUB_TOKEN deste repositório não o enxerga). Sem ele o job `matriz` reprova dizendo o que criar.
+#
+# ⚠️ A matriz NÃO é escrita aqui: vem de installer/instaladores-ci.json, FILTRADA pelo canal (campo
+# `canais`), que a guarda InstaladoresCiArchitectureTests (tests/) mantém em dia com o src/ do backend.
+on:
+  workflow_call:
+    inputs:
+      sha:
+        description: 'Commit do BACKEND a empacotar. Vazio = HEAD da branch do canal no backend.'
+        type: string
+        required: false
+        default: ''
+      canal:
+        description: 'Canal que originou o empacotamento (dev | prod). Decide versão, matriz, concorrência e publicação.'
+        type: string
+        required: false
+        default: 'prod'
+      versao:
+        description: 'Versão X.Y.Z a estampar. Vazio = da tag, ou o núcleo do manifesto de versão do canal no backend.'
+        type: string
+        required: false
+        default: ''
+      tag:
+        description: 'Tag prod-vX.Y.Z da release (deste repositório) que recebe os anexos. Vazio = a release móvel do canal (dev-latest ou prod-latest).'
+        type: string
+        required: false
+        default: ''
+    secrets:
+      SISPEDRACAIDA_BACKEND_TOKEN:
+        required: false
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit do BACKEND a empacotar. Vazio = HEAD da branch do canal no backend.'
+        type: string
+        required: false
+        default: ''
+      canal:
+        description: 'Canal do empacotamento.'
+        type: choice
+        required: false
+        default: 'prod'
+        options: ['prod', 'dev']
+      versao:
+        description: 'Versão X.Y.Z. Vazio = da tag, ou o núcleo do manifesto do canal no backend.'
+        type: string
+        required: false
+        default: ''
+      tag:
+        description: 'Tag prod-vX.Y.Z para (re)anexar os instaladores. Vazio = release móvel do canal (dev-latest / prod-latest).'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: write   # gh release create/upload/edit + mover a tag dev-latest (neste repositório)
+
+# A chave é a RELEASE DE DESTINO: dois runs na mesma release disputariam os assets (o `preparar` de um
+# apagaria os pacotes que o outro acabou de subir na release móvel). O canal entra na chave: sem ele, um
+# ensaio na dev e o run de release da prod cairiam no mesmo grupo, e o cancelamento da dev mataria o da prod.
+#
+# Cancelamento SÓ na dev (D5): na prod, um run de release interrompido deixaria a release sem
+# instaladores (o seguinte espera na fila); na dev vale o oposto — o runner é único, e empacotar um SHA
+# já superado é fila pura, enquanto o pacote de `dev-latest` tem de ser o do commit mais recente.
+concurrency:
+  group: instaladores-windows-${{ inputs.canal }}-${{ inputs.tag || format('{0}-latest', inputs.canal) }}
+  cancel-in-progress: ${{ inputs.canal == 'dev' }}
+
+env:
+  BACKEND_REPO: b3r3ch1t/SisPedraCaida-Backend
+
+jobs:
+  matriz:
+    name: matriz
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolver.outputs.sha }}
+      sha7: ${{ steps.resolver.outputs.sha7 }}
+      scripts_sha: ${{ steps.resolver.outputs.scripts_sha }}
+      versao: ${{ steps.resolver.outputs.versao }}
+      tag: ${{ steps.resolver.outputs.tag }}
+      release: ${{ steps.resolver.outputs.release }}
+      movel: ${{ steps.resolver.outputs.movel }}
+      matriz: ${{ steps.resolver.outputs.matriz }}
+    steps:
+      - name: Conferir o token do backend
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.SISPEDRACAIDA_BACKEND_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Segredo SISPEDRACAIDA_BACKEND_TOKEN ausente: crie um token com contents:read no $BACKEND_REPO e grave-o neste repositório (docs/RunnerWindowsInstaladores.md §6)."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v5
+
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ env.BACKEND_REPO }}
+          token: ${{ secrets.SISPEDRACAIDA_BACKEND_TOKEN }}
+          # Sem `sha`, o HEAD do PRÓPRIO canal — fixar 'prod' aqui faria um dispatch na dev empacotar
+          # produção.
+          ref: ${{ inputs.sha || inputs.canal }}
+          path: backend
+
+      - name: Resolver commit, versão e matriz
+        id: resolver
+        shell: bash
+        env:
+          CANAL: ${{ inputs.canal }}
+          VERSAO_INFORMADA: ${{ inputs.versao }}
+          TAG_INFORMADA: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          command -v jq >/dev/null || { echo "::error::jq ausente no runner"; exit 2; }
+
+          case "$CANAL" in
+            prod) manifesto='backend/.release-please-manifest.prod.json'; prefixo='prod-v' ;;
+            dev)  manifesto='backend/.release-please-manifest.json';      prefixo='v' ;;
+            *) echo "::error::Canal '$CANAL' desconhecido (use dev ou prod)."; exit 1 ;;
+          esac
+
+          sha="$(git -C backend rev-parse HEAD)"
+          scripts_sha="$(git rev-parse HEAD)"
+          tag="${TAG_INFORMADA:-}"
+
+          # Versão: a informada > a da tag (prefixo do canal) > o núcleo do manifesto do canal.
+          # Só X.Y.Z numérico: o Inno grava VersionInfoVersion, que recusa sufixo (-rc, -sha…) — é
+          # também o que impede apontar este workflow para a staging sem resolver o sufixo antes.
+          versao="${VERSAO_INFORMADA:-}"
+          if [ -z "$versao" ] && [ -n "$tag" ]; then versao="${tag#"$prefixo"}"; fi
+          if [ -z "$versao" ]; then versao="$(jq -r '."."' "$manifesto")"; fi
+          if ! [[ "$versao" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Versão '$versao' fora de X.Y.Z (canal '$CANAL', tag '${tag}')."
+            exit 1
+          fi
+
+          # `// []` cobre manifesto anterior ao campo `canais`: sem o default, o `index` em null ABORTA
+          # o jq com erro que não fala de canal.
+          matriz="$(jq -c --arg c "$CANAL" '[.instaladores[] | select(.canais // [] | index($c))]' \
+            installer/instaladores-ci.json)"
+          if [ "$(jq 'length' <<<"$matriz")" -eq 0 ]; then
+            echo "::error::installer/instaladores-ci.json sem instaladores para o canal '$CANAL'."
+            exit 1
+          fi
+
+          # Release de destino (ver o cabeçalho). Tag informada na dev seria ignorada em silêncio: a dev
+          # só publica na móvel, e a release de campo nunca recebe pacote de homologação.
+          if [ "$CANAL" = 'dev' ] && [ -n "$tag" ]; then
+            echo "::error::Tag '$tag' informada no canal dev: a dev publica só em dev-latest."
+            exit 1
+          fi
+          if [ -n "$tag" ]; then
+            release="$tag"; movel=false
+          else
+            release="${CANAL}-latest"; movel=true
+          fi
+
+          {
+            echo "sha=$sha"
+            echo "sha7=${sha:0:7}"
+            echo "scripts_sha=$scripts_sha"
+            echo "versao=$versao"
+            echo "tag=$tag"
+            echo "release=$release"
+            echo "movel=$movel"
+            echo "matriz=$matriz"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Empacotando backend ${sha:0:7} (scripts ${scripts_sha:0:7}) como $versao no canal $CANAL (release $release): $(jq -r 'map(.servico) | join(", ")' <<<"$matriz")"
+
+  # Deixa a release de destino pronta ANTES dos empacotamentos, que sobem cada um o seu pacote direto
+  # do runner Windows. Na móvel: a tag passa para o commit DESTE repositório que gera os pacotes e os
+  # assets anteriores saem — `--clobber` só cobre nome igual, e o nome carrega a versão; sem isto, quando o
+  # número muda a release serviria DUAS versões do mesmo agente. Um serviço que falhe neste run fica
+  # sem pacote na móvel (em vez de um pacote velho com a procedência deste run nas notas).
+  preparar:
+    name: preparar release
+    needs: matriz
+    runs-on: ubuntu-latest
+    steps:
+      - name: Garantir a release ${{ needs.matriz.outputs.release }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          CANAL: ${{ inputs.canal }}
+          RELEASE: ${{ needs.matriz.outputs.release }}
+          MOVEL: ${{ needs.matriz.outputs.movel }}
+          SHA: ${{ needs.matriz.outputs.sha }}
+          SCRIPTS_SHA: ${{ needs.matriz.outputs.scripts_sha }}
+          VERSAO: ${{ needs.matriz.outputs.versao }}
+        run: |
+          set -euo pipefail
+
+          if [ "$MOVEL" != 'true' ]; then
+            # A release de prod vive NESTE repositório, com a MESMA tag da release do backend: a TI acha o
+            # pacote de `prod-vX.Y.Z` pelo número que a API reporta em /api/v1/versao. Reemitir não apaga
+            # nada: os anexos são substituídos por `--clobber` no empacotar.
+            gh release view "$RELEASE" -R "$REPO" >/dev/null 2>&1 ||
+              gh release create "$RELEASE" -R "$REPO" --target "$SCRIPTS_SHA" \
+                --title "Instaladores Windows ${VERSAO}" \
+                --notes "Instaladores da release \`${RELEASE}\` do ${BACKEND_REPO} (https://github.com/${BACKEND_REPO}/releases/tag/${RELEASE})."
+            exit 0
+          fi
+
+          # 1. A tag aponta para o commit DESTE repositório, ANTES de qualquer asset subir: `gh release
+          #    create` numa tag inexistente a criaria no default branch. Pela API, porque este job não faz
+          #    checkout. (O SHA do backend não serve: tag só aponta para commit do próprio repositório.)
+          if gh api "repos/$REPO/git/refs/tags/$RELEASE" >/dev/null 2>&1; then
+            gh api --method PATCH "repos/$REPO/git/refs/tags/$RELEASE" -f sha="$SCRIPTS_SHA" -F force=true >/dev/null
+          else
+            gh api --method POST "repos/$REPO/git/refs" -f ref="refs/tags/$RELEASE" -f sha="$SCRIPTS_SHA" >/dev/null
+          fi
+
+          # 2. Garante a release (idempotente). `--prerelease` é o que mantém a release de campo como
+          #    "Latest" na página do repositório.
+          if [ "$CANAL" = 'dev' ]; then titulo='Instaladores Windows — último da dev'
+          else titulo='Instaladores Windows — último push da prod sem release'; fi
+          gh release view "$RELEASE" -R "$REPO" >/dev/null 2>&1 ||
+            gh release create "$RELEASE" -R "$REPO" --prerelease --title "$titulo" --notes 'Preenchido pelo pipeline.'
+
+          # 3. Sai tudo o que é anterior (ver o comentário do job).
+          gh release view "$RELEASE" -R "$REPO" --json assets -q '.assets[].name' |
+            while read -r asset; do
+              [ -n "$asset" ] && gh release delete-asset "$RELEASE" "$asset" -R "$REPO" --yes
+            done
+
+          # 4. Enquanto empacota, as notas dizem isso — e não a procedência dos pacotes que acabaram de sair.
+          gh release edit "$RELEASE" -R "$REPO" --notes "Empacotando \`${VERSAO}\` do backend \`${SHA:0:7}\` (scripts \`${SCRIPTS_SHA:0:7}\`): ${GITHUB_SERVER_URL}/${REPO}/actions/runs/${GITHUB_RUN_ID}"
+
+  # Os testes rodam ANTES dos três empacotamentos e no mesmo runner: um Empacotamento.psm1 quebrado,
+  # ou um `.iss` que divergiu do C# do backend neste SHA, reprova aqui, apontando o teste, em vez de no
+  # meio do terceiro instalador (ou, pior, numa estação em campo). Pester 3.4 (o do Windows) ou 5.
+  testar:
+    name: testar scripts e guardas
+    needs: matriz
+    runs-on: [self-hosted, windows, instaladores]
+    timeout-minutes: 20
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: 'true'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.matriz.outputs.scripts_sha }}
+
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ env.BACKEND_REPO }}
+          token: ${{ secrets.SISPEDRACAIDA_BACKEND_TOKEN }}
+          ref: ${{ needs.matriz.outputs.sha }}
+          path: backend
+
+      - name: Testes do Empacotamento.psm1
+        shell: pwsh
+        run: ./installer/common/Invoke-TestesEmpacotamento.ps1
+
+      # As guardas comparam o `.iss` com o C# do backend NESTE SHA (códigos de saída, portas do QZ,
+      # argumentos do Helper) e o manifesto com os Windows services de src/. `-windows`: só no Windows.
+      - name: Guardas .iss × backend
+        shell: pwsh
+        run: dotnet test tests/SisPedraCaida.Instaladores.Tests -c Release -p:BackendDir=$env:GITHUB_WORKSPACE/backend/
+
+  empacotar:
+    name: empacotar (${{ matrix.servico }})
+    needs: [matriz, testar, preparar]
+    runs-on: [self-hosted, windows, instaladores]
+    timeout-minutes: 30
+    strategy:
+      # Um instalador quebrado não impede os outros: cada serviço vai para campo por conta própria.
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.matriz.outputs.matriz) }}
+    env:
+      SHA: ${{ needs.matriz.outputs.sha }}
+      SHA7: ${{ needs.matriz.outputs.sha7 }}
+      SCRIPTS_SHA: ${{ needs.matriz.outputs.scripts_sha }}
+      VERSAO: ${{ needs.matriz.outputs.versao }}
+      RELEASE: ${{ needs.matriz.outputs.release }}
+      SERVICO: ${{ matrix.servico }}
+      NOME: ${{ matrix.nome }}
+      SCRIPT: ${{ matrix.script }}
+      PAYLOAD: ${{ matrix.payload }}
+      # Cache do payload de terceiro (QZ Tray) no runner — fora do git (PRD-INSTPROD-01).
+      PRINTMONITOR_PAYLOAD_DIR: ${{ vars.PRINTMONITOR_PAYLOAD_DIR }}
+      # Driver OBRIGATÓRIO da Bematech MP-4200 TH (.exe + driver.sha256), também no cache do runner
+      # (PRD-PMTRAY-02). ⚠️ A variável de repositório precisa existir: sem ela o job do PrintMonitor falha.
+      PRINTMONITOR_DRIVERS_PAYLOAD_DIR: ${{ vars.PRINTMONITOR_DRIVERS_PAYLOAD_DIR }}
+      # core.longpaths para TODO git deste job, sem depender da configuração global do runner: o
+      # worktree materializa o backend inteiro sob RUNNER_TEMP, e PRDs com caminho comprido passam de
+      # 260 caracteres — o `git worktree add` morre com "Filename too long" (reproduzido em 18/10/2026).
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: 'true'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.matriz.outputs.scripts_sha }}
+
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ env.BACKEND_REPO }}
+          token: ${{ secrets.SISPEDRACAIDA_BACKEND_TOKEN }}
+          ref: ${{ needs.matriz.outputs.sha }}
+          path: backend
+
+      # Cada serviço no SEU worktree do backend, criado e descartado pelo próprio build-installer.ps1
+      # (-WorktreeDir/-RemoveWorktree, PRD-INSTPROD-02). Dois empacotamentos no mesmo diretório
+      # disputariam o checkout e o bin/obj — e com um segundo runner no label eles rodam juntos.
+      - name: Empacotar ${{ matrix.servico }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = Join-Path $env:RUNNER_TEMP "$env:SERVICO-$env:SHA7"
+          if (Test-Path $base) { Remove-Item $base -Recurse -Force }
+
+          $parametros = @{
+            BackendRoot    = Join-Path $env:GITHUB_WORKSPACE 'backend'
+            Ref            = $env:SHA
+            Version        = $env:VERSAO
+            SkipFetch      = $true
+            RemoveWorktree = $true
+            WorktreeDir    = Join-Path $base 'wt'
+            PublishDir     = Join-Path $base 'pub'
+            OutputDir      = Join-Path $base 'out'
+          }
+
+          if ($env:PAYLOAD -eq 'true') {
+            # Pacote de campo sem o payload instalaria uma estação incompleta: aqui ele é obrigatório,
+            # mesmo que o script, no uso local, aceite empacotar sem.
+            if (-not $env:PRINTMONITOR_PAYLOAD_DIR -or
+                -not (Get-ChildItem -Path $env:PRINTMONITOR_PAYLOAD_DIR -Filter '*.exe' -File -ErrorAction SilentlyContinue)) {
+              throw "Payload ausente: defina a variável PRINTMONITOR_PAYLOAD_DIR apontando para o cache do QZ Tray no runner (PRD-INSTPROD-01)."
+            }
+            $parametros.PayloadDir = $env:PRINTMONITOR_PAYLOAD_DIR
+
+            # O driver da Bematech é obrigatório no pacote (PRD-PMTRAY-02): o build-installer.ps1 também
+            # reprova sem ele; aqui a mensagem diz qual variável criar.
+            if (-not $env:PRINTMONITOR_DRIVERS_PAYLOAD_DIR -or
+                -not (Get-ChildItem -Path $env:PRINTMONITOR_DRIVERS_PAYLOAD_DIR -Filter '*.exe' -File -ErrorAction SilentlyContinue)) {
+              throw "Payload do driver ausente: defina a variável PRINTMONITOR_DRIVERS_PAYLOAD_DIR apontando para a pasta do runner com o instalador da Bematech MP-4200 TH e o driver.sha256 (PRD-PMTRAY-02)."
+            }
+            $parametros.DriversPayloadDir = $env:PRINTMONITOR_DRIVERS_PAYLOAD_DIR
+          }
+
+          & (Join-Path $env:GITHUB_WORKSPACE $env:SCRIPT) @parametros
+
+          "SAIDA=$(Join-Path $base 'out')" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # O .sha256 só prova algo se bater com o binário: recalcula, e exige exatamente o pacote
+      # esperado (nome + versão) — um .exe a mais seria anexado à release sem ninguém notar.
+      - name: Conferir instalador e SHA-256
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module (Join-Path $env:GITHUB_WORKSPACE 'installer/common/Empacotamento.psm1') -Force
+          $esperado = Join-Path $env:SAIDA "$env:NOME-$env:VERSAO.exe"
+          $exes = @(Get-ChildItem -Path $env:SAIDA -Filter '*.exe' -File)
+          if ($exes.Count -ne 1 -or $exes[0].FullName -ne (Resolve-Path $esperado).Path) {
+            throw "Saída inesperada em ${env:SAIDA}: $($exes.Name -join ', ')"
+          }
+          if (-not (Test-ArquivoSha256 -Arquivo $esperado)) { throw "SHA-256 não confere: $esperado" }
+          $hash = (Get-Content "$esperado.sha256" -Raw).Split(' ')[0]
+          "### $env:NOME-$env:VERSAO.exe`n`n- backend: ``$env:SHA```n- scripts: ``$env:SCRIPTS_SHA```n- SHA-256: ``$hash``" |
+            Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      # Direto para a release de destino, sem artifact (ver o cabeçalho: cota da conta). O `gh` vem do
+      # PATH da máquina (o diagnóstico confere). `--clobber`: reemitir uma tag substitui o anexo. Na dev o
+      # nome do arquivo repete entre SHAs (o X.Y.Z do manifesto só muda com a PR de versão) — a
+      # procedência fica nas notas que o `publicar` escreve, e pacote antigo se reproduz por dispatch com o sha.
+      - name: Anexar à release ${{ needs.matriz.outputs.release }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $env:SAIDA "$env:NOME-$env:VERSAO.exe"
+          gh release upload $env:RELEASE $exe "$exe.sha256" --clobber -R $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw "gh release upload falhou ($LASTEXITCODE) para $env:RELEASE." }
+
+      # O script já remove o seu worktree no finally; isto cobre o run cancelado no meio, que
+      # deixaria a entrada em backend/.git/worktrees apontando para um diretório que o runner apagou.
+      - name: Limpar worktrees órfãos
+        if: always()
+        shell: pwsh
+        run: git -C (Join-Path $env:GITHUB_WORKSPACE 'backend') worktree prune
+
+  publicar:
+    name: publicar
+    needs: [matriz, preparar, empacotar]
+    # Fecha o que saiu mesmo que um serviço tenha falhado: os outros vão para campo, e o run continua
+    # vermelho pelo job que falhou (D3). Reemitir o que faltou: workflow_dispatch com a tag.
+    if: ${{ always() && needs.matriz.result == 'success' && needs.preparar.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Conferir os anexos e escrever as notas
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          CANAL: ${{ inputs.canal }}
+          RELEASE: ${{ needs.matriz.outputs.release }}
+          MOVEL: ${{ needs.matriz.outputs.movel }}
+          SHA: ${{ needs.matriz.outputs.sha }}
+          SCRIPTS_SHA: ${{ needs.matriz.outputs.scripts_sha }}
+          VERSAO: ${{ needs.matriz.outputs.versao }}
+        run: |
+          set -euo pipefail
+
+          # Baixa de volta o que a release SERVE e recalcula: é o que a TI vai baixar, depois de atravessar
+          # a rede a partir do runner. Só a versão deste run (numa release de tag reemitida não há outra; na
+          # móvel o `preparar` já tirou as anteriores).
+          mkdir instaladores && cd instaladores
+          gh release download "$RELEASE" -R "$REPO" -p "*-${VERSAO}.exe" -p "*-${VERSAO}.exe.sha256" || true
+          shopt -s nullglob
+          exes=(*.exe)
+          if [ ${#exes[@]} -eq 0 ]; then
+            echo "::error::Nenhum instalador ${VERSAO} na release ${RELEASE} para ${SHA:0:7}."
+            exit 1
+          fi
+          sha256sum -c ./*.sha256
+
+          tabela="| Instalador | SHA-256 |"$'\n'"|---|---|"
+          for exe in "${exes[@]}"; do
+            tabela+=$'\n'"| \`$exe\` | \`$(cut -d' ' -f1 "$exe.sha256")\` |"
+          done
+          procedencia="Código dos agentes: \`${BACKEND_REPO}@${SHA}\`. Instaladores (\`.iss\`/scripts): \`${REPO}@${SCRIPTS_SHA}\`."
+
+          # Substitui a seção entre marcadores em vez de empilhar: reemitir não duplica a tabela.
+          atualizar_notas() {
+            local secao="$1" corpo
+            corpo="$(gh release view "$RELEASE" -R "$REPO" --json body -q .body)"
+            corpo="$(printf '%s\n' "$corpo" | sed '/<!-- instaladores:inicio -->/,/<!-- instaladores:fim -->/d')"
+            printf '%s\n\n%s\n' "$corpo" "$secao" > ../notas.md
+            gh release edit "$RELEASE" -R "$REPO" --notes-file ../notas.md
+          }
+
+          if [ "$MOVEL" = 'true' ]; then
+            # As notas da móvel são SÓ o registro de procedência (o `preparar` deixou nelas o "empacotando"):
+            # o nome do arquivo não carrega o SHA.
+            if [ "$CANAL" = 'dev' ]; then
+              titulo="## Instaladores Windows — último da \`dev\`"
+              aviso="> Pacote de **homologação em estação de teste**. O de campo é o asset da release \`prod-vX.Y.Z\`."
+            else
+              titulo="## Instaladores Windows — último push da \`prod\` sem release"
+              aviso="> Push na \`prod\` do backend que não cunhou release (D4). O de campo é o asset da release \`prod-vX.Y.Z\`."
+            fi
+            printf '%s\n' "<!-- instaladores:inicio -->" "$titulo" "" "Versão \`${VERSAO}\`. ${procedencia}" "" "$tabela" "" "$aviso" "<!-- instaladores:fim -->" > ../notas.md
+            gh release edit "$RELEASE" -R "$REPO" --notes-file ../notas.md
+          else
+            # O pacote não é assinado por CA pública — o hash publicado é a prova de integridade que a TI
+            # confere antes de instalar.
+            atualizar_notas "<!-- instaladores:inicio -->"$'\n'"## Instaladores Windows"$'\n\n'"${procedencia}"$'\n\n'"$tabela"$'\n'"<!-- instaladores:fim -->"
+          fi
+
+          {
+            echo "## Instaladores ${VERSAO} (backend ${SHA:0:7}) na release \`${RELEASE}\`"
+            echo
+            echo "$tabela"
+          } >> "$GITHUB_STEP_SUMMARY"

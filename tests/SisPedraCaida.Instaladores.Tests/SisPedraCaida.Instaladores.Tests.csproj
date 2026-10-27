@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Guardas dos instaladores Inno contra o código C# do backend que eles espelham (códigos de saída,
+    portas do QZ Tray, argumentos do Helper, nomes de serviço, URL do dashboard) e do manifesto de
+    instaladores contra os Windows services de src/. Vieram do SisPedraCaida-Backend junto com os
+    instaladores (23/10/2026): o `.iss` vive aqui, o C# lá — a guarda precisa dos dois lados.
+
+    BackendDir aponta o checkout do backend. Padrão: `backend/` na raiz deste repositório (onde o CI
+    faz o checkout) e, sem ele, o repositório irmão do workspace (`../SisPedraCaida-Backend`).
+    Sobrescreva com `-p:BackendDir=<caminho>/`. O valor vai para o assembly (AssemblyMetadata), e é
+    dali que os testes leem os arquivos de src/ — a mesma árvore contra a qual compilaram.
+
+    TFM -windows: o PrintMonitor.Setup é WindowsDesktop (WinForms do modo config-ui), e o testhost
+    exige o runtime Microsoft.WindowsDesktop.App — estes testes só rodam no Windows.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Transitivas dos projetos do backend: a correção central delas vive no Directory.Build.props de
+         lá, que não se aplica a este projeto. O advisory é cobrado no backend; aqui só reportado. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904;NU1608</WarningsNotAsErrors>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(BackendDir)' == ''">
+    <BackendDir Condition="Exists('$(MSBuildThisFileDirectory)..\..\backend\SisPedraCaida.slnx')">$(MSBuildThisFileDirectory)..\..\backend\</BackendDir>
+    <BackendDir Condition="'$(BackendDir)' == ''">$(MSBuildThisFileDirectory)..\..\..\SisPedraCaida-Backend\</BackendDir>
+  </PropertyGroup>
+
+  <Target Name="ConferirBackendDir" BeforeTargets="ResolveProjectReferences;Restore;CollectPackageReferences">
+    <Error Condition="!Exists('$(BackendDir)SisPedraCaida.slnx')"
+           Text="Checkout do SisPedraCaida-Backend não encontrado em '$(BackendDir)'. Clone-o ao lado deste repositório ou informe -p:BackendDir=&lt;caminho&gt;/." />
+  </Target>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>BackendDir</_Parameter1>
+      <_Parameter2>$([System.IO.Path]::GetFullPath('$(BackendDir)'))</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageReference Include="Moq" Version="4.21.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(BackendDir)src\SisPedraCaida.PrintMonitor.Core\SisPedraCaida.PrintMonitor.Core.csproj" />
+    <ProjectReference Include="$(BackendDir)src\SisPedraCaida.PrintMonitor.Infrastructure\SisPedraCaida.PrintMonitor.Infrastructure.csproj" />
+    <ProjectReference Include="$(BackendDir)src\SisPedraCaida.PrintMonitor.Helper\SisPedraCaida.PrintMonitor.Helper.csproj" />
+    <ProjectReference Include="$(BackendDir)src\SisPedraCaida.PrintMonitor.Setup\SisPedraCaida.PrintMonitor.Setup.csproj" />
+  </ItemGroup>
+
+</Project>
