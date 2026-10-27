@@ -6,12 +6,11 @@
 > §3). Antes (22/10/2026 16:35): PRD-INSTDEV-04.
 
 Como preparar uma máquina Windows e gerar à mão o `TefAgentSetup-<versão>.exe`, o
-`PrintMonitorSetup-<versão>.exe`, o `BalancaAgentSetup-<versão>.exe` e o `TotemSetup-<versão>.exe`.
+`PrintMonitorSetup-<versão>.exe` e o `TotemSetup-<versão>.exe`.
 
 **Este doc é sobre a máquina que GERA o pacote, não sobre a estação que o executa.** Os
 pré-requisitos de quem instala estão, no backend, em [`TefAgentInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/TefAgentInstalador.md) §5.1,
-[`PrintMonitorInstalacaoWindows.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/PrintMonitorInstalacaoWindows.md) §2 e
-[`BalancaAgentInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/BalancaAgentInstalador.md). Para preparar o **runner** do CI, que é
+[`PrintMonitorInstalacaoWindows.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/PrintMonitorInstalacaoWindows.md) §2. Para preparar o **runner** do CI, que é
 outra coisa (conta de serviço, ACL, registro do runner), abra
 [`RunnerWindowsInstaladores.md`](RunnerWindowsInstaladores.md).
 
@@ -60,7 +59,7 @@ versão homologada; o do driver registra também o SHA-256 e a assinatura Authen
 outro arquivo) e copia os binários para o worktree pinado — eles nunca estão lá, porque estão fora do
 git.
 
-Para empacotar **só o TEF ou só a balança**, nenhum payload é necessário.
+Para empacotar **só o TEF**, nenhum payload é necessário.
 
 ---
 
@@ -163,15 +162,14 @@ pwsh installer/tefagent/build-installer.ps1 -UseWorkingTree -SkipPublish -DryRun
 pwsh installer/tefagent/build-installer.ps1 -Ref <sha> -Version 3.10.0
 ```
 
-A balança segue o molde do (1): `pwsh installer/balanca/build-installer.ps1 -Ref origin/dev`. O totem
-também, com o bootstrapper do WebView2 **opcional no build local** (sem ele o pacote sai sem o runtime e a
+O totem segue o molde do (1), com o bootstrapper do WebView2 **opcional no build local** (sem ele o pacote sai sem o runtime e a
 checagem só avisa): `pwsh installer/totem/build-installer.ps1 -Ref origin/dev -WebView2BootstrapperPath C:\ci-cache\totem-webview2`
 (pasta com o `MicrosoftEdgeWebview2Setup.exe` e o `webview2.sha256`; receita em
 [`installer/totem/payload-webview2/README.md`](../installer/totem/payload-webview2/README.md)). **No CI ele é
 obrigatório** desde o PRD-TOTEMINST-02: o pacote de campo sempre o traz.
 
 **Saída:** `artifacts/installer/<Nome>-<versão>.exe` + `<Nome>-<versão>.exe.sha256`, com
-`<Nome>` ∈ { `TefAgentSetup`, `PrintMonitorSetup`, `BalancaAgentSetup`, `TotemSetup` }. O hash é a **única prova de
+`<Nome>` ∈ { `TefAgentSetup`, `PrintMonitorSetup`, `TotemSetup` }. O hash é a **única prova de
 integridade** do pacote — ele não é assinado por CA pública (decisão D6 do PRD-TEFINST-00). Confira
 com:
 
@@ -243,4 +241,4 @@ Get-FileHash artifacts\installer\TefAgentSetup-3.10.0.exe -Algorithm SHA256
 
 - [`RunnerWindowsInstaladores.md`](RunnerWindowsInstaladores.md) — preparar e registrar o runner do CI.
 - [`CLAUDE.md`](../CLAUDE.md) §*CI/CD* — quando cada canal gera pacote, e as armadilhas do empacotamento.
-- No backend: [`TefAgentInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/TefAgentInstalador.md) · [`PrintMonitorInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/PrintMonitorInstalador.md) · [`BalancaAgentInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/BalancaAgentInstalador.md) — o que cada instalador faz na estação.
+- No backend: [`TefAgentInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/TefAgentInstalador.md) · [`PrintMonitorInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/PrintMonitorInstalador.md) — o que cada instalador faz na estação.

@@ -38,7 +38,7 @@ branch que o backend dispara no canal de produção.
     e do push do merge na `dev` ([40498109142](https://github.com/b3r3ch1t/SisPedraCaida-Instaladores/actions/runs/40498109142)):
     `dev-latest` trocou 4.1.0 por 4.1.1 sem sobrar asset antigo;
   - canal prod, sem `sha` e sem `tag` ([40499402027](https://github.com/b3r3ch1t/SisPedraCaida-Instaladores/actions/runs/40499402027)):
-    `prod-latest` com Balanca, PrintMonitor, TefAgent e Totem 3.19.5.
+    `prod-latest` com PrintMonitor, TefAgent e Totem 3.19.5.
 - `INSTALADORES_WINDOWS=true` neste repositório.
 
 ## Pendência operacional (backend)
