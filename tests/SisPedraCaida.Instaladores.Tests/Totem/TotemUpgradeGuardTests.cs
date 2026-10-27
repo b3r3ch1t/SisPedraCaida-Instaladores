@@ -60,7 +60,7 @@ public class TotemUpgradeGuardTests
 
         foreach (var (pasta, principal) in new[]
                  {
-                     ("tefagent", "TefAgent.iss"), ("printmonitor", "PrintMonitor.iss"), ("balanca", "BalancaAgent.iss"),
+                     ("tefagent", "TefAgent.iss"), ("printmonitor", "PrintMonitor.iss"),
                  })
         {
             Assert.DoesNotContain(AppIdDoTotem, LerDe(pasta, principal), StringComparison.OrdinalIgnoreCase);

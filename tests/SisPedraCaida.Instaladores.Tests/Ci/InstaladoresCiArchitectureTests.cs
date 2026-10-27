@@ -76,8 +76,8 @@ public partial class InstaladoresCiArchitectureTests
 
         // Sem isto a guarda passaria vazia no dia em que a varredura deixasse de achar os serviços.
         Assert.True(
-            servicos.Count >= 4,
-            $"Esperava ao menos Tef.Agent, PrintMonitor.Service, Balanca.Agent e Totem.Agent; achei {servicos.Count}: {string.Join(", ", servicos)}.");
+            servicos.Count >= 3,
+            $"Esperava ao menos Tef.Agent, PrintMonitor.Service e Totem.Agent; achei {servicos.Count}: {string.Join(", ", servicos)}.");
 
         var cobertos = manifesto.Instaladores.SelectMany(i => i.Projetos)
             .Concat(manifesto.Pendentes.Select(p => p.Projeto))
@@ -203,31 +203,6 @@ public partial class InstaladoresCiArchitectureTests
     }
 
     /// <summary>
-    /// O instalador da balança registra o serviço com o MESMO nome que o agente declara em
-    /// <c>UseWindowsService</c>.
-    /// </summary>
-    /// <remarks>
-    /// Sem <c>Setup.exe</c>, o nome vive em dois lugares: o <c>.iss</c> (que registra, para e remove
-    /// o serviço) e o <c>Program.cs</c> (que o host usa para se reconhecer). Divergir registra um
-    /// serviço que o host não reconhece, e o instalador seguinte para/remove um serviço que não
-    /// existe — deixando o antigo órfão (armadilha #101c).
-    /// </remarks>
-    [Fact]
-    public void InstaladorDaBalanca_UsaONomeDeServicoDoAgente()
-    {
-        var raiz = Raizes.Instaladores;
-        var programa = File.ReadAllText(Path.Combine(Raizes.Backend, "src", "SisPedraCaida.Balanca.Agent", "Program.cs"));
-        var iss = File.ReadAllText(Path.Combine(raiz, "installer", "balanca", "BalancaAgent.iss"));
-
-        var noAgente = NomeServicoAgenteRegex().Match(programa);
-        var noInstalador = NomeServicoIssRegex().Match(iss);
-
-        Assert.True(noAgente.Success, "ServiceName não encontrado no Program.cs do Balanca.Agent.");
-        Assert.True(noInstalador.Success, "#define ServicoNome não encontrado no BalancaAgent.iss.");
-        Assert.Equal(noAgente.Groups[1].Value, noInstalador.Groups[1].Value);
-    }
-
-    /// <summary>
     /// Toda variável de payload do manifesto está no <c>env:</c> do job <c>empacotar</c> e no do diagnóstico do
     /// runner (PRD-TOTEMINST-02).
     /// </summary>
@@ -321,13 +296,6 @@ public partial class InstaladoresCiArchitectureTests
     [GeneratedRegex("^[A-Z][A-Z0-9_]*_PAYLOAD_DIR$")]
     private static partial Regex VariavelDePayloadRegex();
 
-    /// <summary><c>ServiceName = "..."</c> do <c>UseWindowsService</c>.</summary>
-    [GeneratedRegex("""ServiceName\s*=\s*"([^"]+)"\s*\)""")]
-    private static partial Regex NomeServicoAgenteRegex();
-
-    /// <summary><c>#define ServicoNome "..."</c> do <c>.iss</c>.</summary>
-    [GeneratedRegex("""#define\s+ServicoNome\s+"([^"]+)"\s*""")]
-    private static partial Regex NomeServicoIssRegex();
 
     /// <summary>Projetos de <c>src/</c> cujo código registra o host como Windows Service.</summary>
     /// <returns>Nomes dos projetos (pasta sob <c>src/</c>).</returns>

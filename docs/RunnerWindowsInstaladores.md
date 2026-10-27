@@ -332,6 +332,6 @@ gh workflow run instaladores-windows.yml -R b3r3ch1t/SisPedraCaida-Instaladores 
 `versao` fica vazio: ela sai da própria tag (`prod-v` + `X.Y.Z`). Conferir com
 `gh release view prod-v2.16.0 -R b3r3ch1t/SisPedraCaida-Instaladores --json assets` (a release nasce
 aqui se não existir) — devem aparecer
-`TefAgentSetup-2.16.0.exe`, `PrintMonitorSetup-2.16.0.exe` e `BalancaAgentSetup-2.16.0.exe`, cada um
+`TefAgentSetup-2.16.0.exe` e `PrintMonitorSetup-2.16.0.exe`, cada um
 com o `.sha256` ao lado. O mesmo comando serve para `prod-v2.15.0` (`071e5d5`), se o pacote daquela
 versão ainda interessar.
