@@ -56,6 +56,7 @@ installer/
 ├── common/                     # Empacotamento.psm1 (núcleo) + Pester + montar-instalador.ps1
 ├── tefagent/  printmonitor/  balanca/  totem/   # .iss + includes + build-installer.ps1 (+ payloads fora do git)
 scripts/runner-windows-diagnostico.ps1   # pré-requisitos do runner Windows
+scripts/preparar-runner-windows.ps1      # prepara e registra o runner (admin, idempotente)
 tests/SisPedraCaida.Instaladores.Tests/  # guardas .iss × C# do backend (xUnit, net10.0-windows)
 artifacts/installer/            # pacotes versionados à força (git add -f) — uma versão só
 docs/                           # RunnerWindowsInstaladores.md · InstaladoresBuildLocalWindows.md
@@ -158,3 +159,4 @@ repositório (`m`–`p`).
 | o | Guarda verde aqui e estação quebrada em campo | A guarda compara com o backend que ela compilou: o CI de PR usa a `dev` do backend. Mudança de contrato vai **backend primeiro**; o `testar` do empacotamento repete as guardas contra o SHA exato antes de empacotar |
 | p | Pacote "igual" com hash diferente | O `.iss` não é pinado pelo `-Ref` (ele é deste checkout). Para reproduzir, `git checkout` do SHA de `Scripts` aqui. `Scripts … (com alteracoes locais)` = nunca distribuir |
 | q | `Instaladores Windows (dev)` termina em **`startup_failure`** ("workflow file issue") no push, mesmo com `INSTALADORES_WINDOWS` desligada | O `GITHUB_TOKEN` deste repositório nasce **só de leitura** (`default_workflow_permissions = read`), e o reusable `instaladores-windows.yml` pede `contents: write`. Chamador que não concede a permissão é recusado **no startup**, antes do `if`. Todo workflow que faz `uses: ./.github/workflows/instaladores-windows.yml` declara `permissions: contents: write`. Os disparos do backend (`workflow_dispatch`) não passam por aqui: o próprio reusable declara a permissão |
+| r | Job Windows morre com "pwsh não encontrado" (ou `winget install Microsoft.PowerShell --scope machine` dá `0x80070005` e o pwsh do usuário some) | O pwsh da Store é por usuário e não existe para `NETWORK SERVICE`; o manifesto de máquina do winget é `.msixbundle`, que falha e remove o da Store. PowerShell 7 vai pelo **MSI** da release oficial — é o que o [`preparar-runner-windows.ps1`](scripts/preparar-runner-windows.ps1) faz |

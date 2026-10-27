@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Prepara esta máquina Windows como o runner `[self-hosted, windows, instaladores]` deste repositório
     (runbook docs/RunnerWindowsInstaladores.md §3, §4 e §5), de forma idempotente.
