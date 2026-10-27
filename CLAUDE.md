@@ -1,6 +1,8 @@
 # SisPedraCaida-Instaladores — Guia
 
-> **Última atualização deste CLAUDE.md:** 27/10/2026 16:40 (horário local, UTC-3) — **WebView2 do totem
+> **Última atualização deste CLAUDE.md:** 27/10/2026 17:55 (horário local, UTC-3) — épico **`totem-instalador`
+> concluído** ([`PRD/DONE/totem-instalador/`](PRD/DONE/totem-instalador/)): `TotemSetup` com WebView2 em `dev-latest`;
+> o de campo passa a trazê-lo na próxima promoção `dev` → `prod` · antes (27/10/2026 16:40): **WebView2 do totem
 > obrigatório no CI** e payloads declarados no manifesto (PRD-TOTEMINST-02, armadilhas **f** e **t**) · antes
 > (27/10/2026 15:55): guardas `.iss` × C# do
 > **totem** (PRD-TOTEMINST-01, `tests/…/Totem/`) e totem na política de upgrade comum · antes (27/10/2026 08:45):

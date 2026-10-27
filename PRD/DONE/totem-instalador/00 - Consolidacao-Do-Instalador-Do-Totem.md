@@ -1,6 +1,6 @@
 # PRD-TOTEMINST-00 — Consolidação do instalador do totem no SisPedraCaida-Instaladores (Master)
 
-> **Status:** Em andamento — 01 concluído; 02 e 03 esperam o merge da #8 (run da `dev`) e da #1275 do backend — **Última atualização:** 27/10/2026 17:35
+> **Status:** Concluído — **Última atualização:** 27/10/2026 17:55
 
 ## Objetivo
 
@@ -76,3 +76,17 @@ começa e para `DONE` quando seu critério de aceite fecha, individualmente.
 - Assinatura de código do pacote (decisão D6 do PRD-TEFINST-00: o `.sha256` publicado é a prova de integridade).
 - Execução do roteiro manual `docs/TotemRoteiroValidacao.md` num terminal real (pendência do PRD-TOTEM-04 no
   backend).
+
+## Fechamento (27/10/2026)
+
+| Critério | Resultado |
+|---|---|
+| 01, 02 e 03 em `PRD/DONE/totem-instalador/` | feito |
+| `ci.yml` e `commitlint.yml` verdes no PR para a `dev` | #8 verde (guardas 88/88 no `windows-latest`) e mesclada às 15:33 UTC |
+| `TotemSetup` em `dev-latest` com o WebView2 | `TotemSetup-4.3.0.exe` (47.580.779 bytes), log com `WebView2:   bootstrapper embutido`, run 40532187098 verde em todos os jobs |
+| `runner-windows-diagnostico.yml` com os três payloads | verde a partir da branch do épico (run 40531366678) |
+| Docs coerentes | `CLAUDE.md` deste repositório, o da raiz do workspace e o runbook do backend (#1272 e #1275, mescladas) |
+
+O que ficou de fora, como previsto: preparação automática da estação (conta, autologon, antivírus), WebView2
+Standalone, assinatura de código do pacote e o roteiro manual em terminal real (PRD-TOTEM-04 do backend). O pacote
+de campo (`prod-vX.Y.Z`) passa a trazer o WebView2 na próxima promoção `dev` → `prod` deste repositório.

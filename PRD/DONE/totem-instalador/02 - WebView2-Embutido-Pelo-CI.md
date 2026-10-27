@@ -1,6 +1,6 @@
 # PRD-TOTEMINST-02 — WebView2 embutido pelo CI
 
-> **Status:** Em andamento — critérios 1 a 4 fechados (cache, variável e diagnóstico verdes no runner); falta o run da `dev` depois do merge da #8 — **Última atualização:** 27/10/2026 17:35
+> **Status:** Concluído — **Última atualização:** 27/10/2026 17:55
 
 ## Objetivo
 
@@ -181,5 +181,19 @@ montado **pelo próprio runner**, num job de uso único (branch `ops/cache-webvi
 | 2. Variável `TOTEM_WEBVIEW2_PAYLOAD_DIR` | criada = `C:\ci-cache\totem-webview2` |
 | 3. Diagnóstico da branch | **verde**: os três payloads `OK`, Pester 60/60 ([run 40531366678](https://github.com/b3r3ch1t/SisPedraCaida-Instaladores/actions/runs/40531366678)) |
 
-Critério 4 fechado. Falta só o 5: depois do merge da #8, o run do `instaladores-dev.yml` com o `TotemSetup` em
-`dev-latest` trazendo a linha `WebView2:   bootstrapper embutido`.
+Critério 4 fechado.
+
+### Critério 5 — run da `dev` depois do merge (27/10/2026)
+
+A [#8](https://github.com/b3r3ch1t/SisPedraCaida-Instaladores/pull/8) foi mesclada às 15:33 UTC. O push disparou o
+`Instaladores Windows (dev)` ([run 40532187098](https://github.com/b3r3ch1t/SisPedraCaida-Instaladores/actions/runs/40532187098)),
+verde em todos os jobs: `matriz`, `testar`, `preparar release`, `empacotar` (tefagent, printmonitor, totem) e `publicar`.
+
+| Asset em `dev-latest` | Tamanho | SHA-256 |
+|---|---|---|
+| `TotemSetup-4.3.0.exe` | 47.580.779 bytes | `f508b667891f1f93987c01e5f878e398b0054a698ebc210f7d8c29690fe85a6d` |
+
+Log do job do totem: `WebView2:   bootstrapper embutido (MicrosoftEdgeWebview2Setup.exe)`, origem backend
+`d11b1ba8`, scripts `05cd4227`. O build local de teste, com `.exe` falso de 8 bytes, deu 45.810.680 bytes; a
+diferença de cerca de 1,77 MB corresponde ao bootstrapper real comprimido (os dois builds partem de SHAs do backend
+diferentes, então a comparação é indicativa).
