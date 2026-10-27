@@ -1,6 +1,7 @@
 # SisPedraCaida-Instaladores — Guia
 
-> **Última atualização deste CLAUDE.md:** 27/10/2026 17:55 (horário local, UTC-3) — épico **`totem-instalador`
+> **Última atualização deste CLAUDE.md:** 27/10/2026 18:10 (horário local, UTC-3) — armadilha **(u)**: guarda
+> não lê documentação do backend (bloqueava a reemissão de prod) · antes (27/10/2026 17:55): épico **`totem-instalador`
 > concluído** ([`PRD/DONE/totem-instalador/`](PRD/DONE/totem-instalador/)): `TotemSetup` com WebView2 em `dev-latest`;
 > o de campo passa a trazê-lo na próxima promoção `dev` → `prod` · antes (27/10/2026 16:40): **WebView2 do totem
 > obrigatório no CI** e payloads declarados no manifesto (PRD-TOTEMINST-02, armadilhas **f** e **t**) · antes
@@ -48,9 +49,11 @@ workflows. Consequências:
   guardas de `tests/` pegam a divergência — mas só quando rodam contra o backend novo (CI de PR usa a
   `dev` do backend; o `testar` do empacotamento usa o SHA exato).
 - O projeto de testes referencia do backend `PrintMonitor.{Core,Infrastructure,Helper,Setup}` e
-  `Totem.{Agent,Setup}` — **nunca** `Totem.Shell` nem outra casca WinForms (#104a do backend). A guarda
-  `ParametrosDoInno_NoIss_SaoOsDocumentadosNoBackend` lê também o `docs/TotemInstalacaoWindows.md` de lá:
-  parâmetro novo do `TotemSetup` entra primeiro no runbook do backend.
+  `Totem.{Agent,Setup}` — **nunca** `Totem.Shell` nem outra casca WinForms (#104a do backend).
+- ⚠️ **Guarda não lê documentação do backend.** O `testar` da reemissão de prod roda as guardas contra a `prod`
+  do backend, que pode estar versões atrás da `dev` — doc atrasado lá reprovaria o pacote de campo por um texto
+  (aconteceu em 27/10/2026 com o `/CONTEUDOURL=`, armadilha **u**). Guarda confere **código** do backend; a
+  lista de parâmetros do `TotemSetup` vive no cabeçalho do `pages.iss`, e o runbook de lá a acompanha.
 - Os docs **do que o instalador faz na estação** ficaram no backend, ao lado do código que provisiona:
   [`TefAgentInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/TefAgentInstalador.md),
   [`PrintMonitorInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/PrintMonitorInstalador.md),
@@ -176,3 +179,4 @@ repositório (`m`–`p`).
 | r | Job Windows morre com "pwsh não encontrado" (ou `winget install Microsoft.PowerShell --scope machine` dá `0x80070005` e o pwsh do usuário some) | O pwsh da Store é por usuário e não existe para `NETWORK SERVICE`; o manifesto de máquina do winget é `.msixbundle`, que falha e remove o da Store. PowerShell 7 vai pelo **MSI** da release oficial — é o que o [`preparar-runner-windows.ps1`](scripts/preparar-runner-windows.ps1) faz |
 | s | Pacotes gerados e o job reprova com `Artifact storage quota has been hit` | A cota de artifacts é **da conta**, somada entre os repositórios privados (o backend guarda ~35 MB de `coverage-report` por run). Os `.exe` (~350 MB por run) **não** passam por artifact: `gh release upload` do runner direto para a release; não reintroduzir `upload-artifact` para pacote |
 | t | Payload novo no manifesto e o job reprova "Payload ausente" com a variável criada; ou o diagnóstico fica verde sem conferir o cache novo | O contexto `vars` do Actions **não é enumerável**: o workflow só enxerga a variável que declara no `env:`. Toda `variavel` de `payloads` precisa de linha no `env:` do `instaladores-windows.yml` **e** do `runner-windows-diagnostico.yml` — guarda `TodaVariavelDePayload_EstaNosDoisWorkflows`. E crie o cache e a variável **antes** de mesclar na `dev`: o push dispara o empacotamento |
+| u | Guarda verde no PR para a `dev` e vermelha na promoção para a `prod` (ou no `testar` da reemissão), com o pacote certo | A guarda lia algo do backend que só existe na `dev` de lá (o runbook com `/CONTEUDOURL=`, PRD-TOTEMINST-01). O CI de PR para a `prod` e o `testar` de prod rodam contra a **`prod` do backend**. Guarda só lê **código** do backend que já esteja na versão empacotada; nunca documentação. Antes de promover, rode `dotnet test … -p:BackendDir=<worktree do backend na origin/prod>/` |

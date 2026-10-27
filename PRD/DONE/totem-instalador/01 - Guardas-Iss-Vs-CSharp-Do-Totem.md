@@ -126,3 +126,14 @@ Pasta do instalador: `installer/totem`. Helper `Ler(arquivo)` igual ao das outra
 Critério 4 fechado: o `ci.yml` da [#8](https://github.com/b3r3ch1t/SisPedraCaida-Instaladores/pull/8)
 (`windows-latest`, guardas contra a `dev` do backend já com o #1272) passou em 3m12s, com commitlint, título e
 GitGuardian verdes.
+
+## Revisão (27/10/2026 18:10) — guarda dos parâmetros do Inno desacoplada do runbook do backend
+
+Ao preparar a promoção `dev` → `prod`, as guardas rodadas contra a `prod` do backend (4.1.2) deram 87/88: o runbook
+de lá ainda não documentava `/CONTEUDOURL=` (a #1272 só estava na `dev`). O CI da PR para a `prod` e o job `testar`
+da reemissão rodam contra a `prod` do backend, então a decisão **D3** (conferir o runbook) bloqueava o pacote de campo
+por um texto atrasado, com o pacote correto.
+
+A guarda virou `ParametrosDoInno_NoIss_MapeiamParaOSetup_EEstaoNoCabecalho`: mantém o mapeamento
+`/APIURL=` → `--api-url` (e os outros três, conferidos contra o C# em `ParametrosDoSetup_…`) e troca o runbook pela lista
+"Parâmetros do silencioso" do cabeçalho do `pages.iss`. **D3 fica revogada**; armadilha **u** no `CLAUDE.md`.
