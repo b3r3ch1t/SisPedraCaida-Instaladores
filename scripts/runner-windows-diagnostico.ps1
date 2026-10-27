@@ -169,17 +169,35 @@ else {
 $git = Get-PrimeiraLinha 'git' @('--version')
 if ($git) {
     Add-Resultado 'Git' 'OK' $git
-    $longGit = Get-PrimeiraLinha 'git' @('config', '--global', '--get', 'core.longpaths')
+    # Arquivo de configuração, não o valor efetivo: no Actions o GIT_CONFIG_* do job deixaria o efetivo
+    # sempre `true` e o aviso cego. `--system` é o que o runbook (§3) e o preparar-runner-windows.ps1
+    # gravam — vale para a conta do serviço; `--global` só se gravado COMO ela.
+    $longGit = Get-PrimeiraLinha 'git' @('config', '--system', '--get', 'core.longpaths')
+    $escopo = 'system'
+    if ($longGit -ne 'true') {
+        $longGit = Get-PrimeiraLinha 'git' @('config', '--global', '--get', 'core.longpaths')
+        $escopo = 'global'
+    }
     if ($longGit -eq 'true') {
-        Add-Resultado 'git core.longpaths (global)' 'OK' 'true'
+        Add-Resultado 'git core.longpaths' 'OK' "true ($escopo)"
     }
     else {
         # O job de empacotamento liga por GIT_CONFIG_*, mas o actions/checkout roda antes dele.
-        Add-Resultado 'git core.longpaths (global)' 'AVISO' "'$longGit' — git config --global core.longpaths true (como a conta do runner)"
+        Add-Resultado 'git core.longpaths' 'AVISO' "'$longGit' — git config --system core.longpaths true (como administrador)"
     }
 }
 else {
     Add-Resultado 'Git' 'FALHA' 'ausente. winget install --id Git.Git --scope machine'
+}
+
+# O job `empacotar` anexa o pacote à release com `gh release upload` direto do runner (sem artifact do
+# Actions, que esgota a cota da conta) — sem o gh no PATH da máquina o pacote sai e não é publicado.
+$gh = Get-PrimeiraLinha 'gh' @('--version')
+if ($gh) {
+    Add-Resultado 'GitHub CLI (gh)' 'OK' $gh
+}
+else {
+    Add-Resultado 'GitHub CLI (gh)' 'FALHA' 'ausente. winget install --id GitHub.cli --scope machine'
 }
 
 try {

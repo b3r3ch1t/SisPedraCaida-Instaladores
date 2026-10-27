@@ -1,6 +1,8 @@
 # Runner Windows dos instaladores — runbook
 
-> **Última atualização:** 23/10/2026 17:30 (horário local) — **mudou de repositório**: runner,
+> **Última atualização:** 27/10/2026 08:45 (horário local) — **runner registrado** (`instaladores-win-01`,
+> PRD-RUNWIN-01): §3 ganhou o `scripts/preparar-runner-windows.ps1` e a armadilha do pwsh via winget/MSIX;
+> pacotes publicados sem artifact (release móvel `prod-latest` para prod sem tag). Antes (23/10/2026 17:30): **mudou de repositório**: runner,
 > variáveis, segredos e workflows passaram para o **SisPedraCaida-Instaladores** (§4, §6). O backend só
 > dispara (§6.4). Antes (22/10/2026 16:35): §5 cobre os **dois** payloads do PrintMonitor.
 >
@@ -31,15 +33,32 @@ backend** (que dispara este repositório) e o `instaladores-dev.yml` daqui só r
 
 ## 3. Preparar (como administrador, uma vez)
 
-Tudo **`--scope machine`**: o serviço do runner roda com outra conta, e o que foi instalado *por
+> **Atalho (27/10/2026):** [`scripts/preparar-runner-windows.ps1`](../scripts/preparar-runner-windows.ps1)
+> faz §3, a permissão dos caches de §5 e o registro de §4 de uma vez, idempotente, num PowerShell **de
+> administrador** (roda no 5.1 de uma máquina limpa). Pré-requisitos: `gh` autenticado com admin neste
+> repositório (o token de registro é pedido à API e vai direto ao `config.cmd`, sem ser impresso), o
+> pacote do runner extraído em `C:\actions-runner` e os caches de §5 montados.
+>
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File scripts\preparar-runner-windows.ps1
+> ```
+
+Tudo **em escopo de máquina**: o serviço do runner roda com outra conta, e o que foi instalado *por
 usuário* por quem preparou a máquina **não existe para ela**. É a causa nº 1 de "ISCC não encontrado".
 
 ```powershell
 winget install --id Microsoft.DotNet.SDK.10 --scope machine
-winget install --id Microsoft.PowerShell --scope machine
 winget install --id Git.Git --scope machine
 winget install --id JRSoftware.InnoSetup --scope machine
+# PowerShell 7: MSI da release oficial (PowerShell-X.Y.Z-win-x64.msi), msiexec /qn ADD_PATH=1
 ```
+
+⚠️ **PowerShell 7 não vai pelo winget.** O manifesto `Microsoft.PowerShell` com `--scope machine` é um
+`.msixbundle`: falha com `0x80070005 Access is denied` e, no caminho, **remove o pwsh da Store** de quem
+rodou (reproduzido em 27/10/2026). E o pwsh da Store, que mora em `%LOCALAPPDATA%\Microsoft\WindowsApps`,
+não existe para `NETWORK SERVICE` — todo `shell: pwsh` do workflow falharia. O MSI instala em
+`C:\Program Files\PowerShell\7` e põe a pasta no PATH da máquina; o script confere o SHA-256 do MSI contra
+o digest da release antes de instalar.
 
 ```powershell
 Set-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem LongPathsEnabled 1 -Type DWord
@@ -167,7 +186,7 @@ mas a assinatura tem carimbo de tempo).
    repositórios** (aqui liga o `instaladores-dev.yml`; no backend, os disparos de §6.4). A partir daí
    todo push na `prod` do backend empacota.
 3. Ensaio (etapa 05): **Actions → Instaladores Windows → Run workflow** (branch `prod`) com `sha` vazio
-   (HEAD da `prod` do backend) e `tag` vazia — gera os três instaladores só como artifact.
+   (HEAD da `prod` do backend) e `tag` vazia — gera os quatro instaladores na release móvel `prod-latest`.
 
 ### 6.1 Segredos (um token, dois repositórios)
 
@@ -253,7 +272,7 @@ registro** da §4 nem deve sair da página que o emite:
 4. §6.1 — rodar o diagnóstico até ficar **verde**.
 5. §6.1 — o token e os dois segredos.
 6. §6.2 — só então criar `INSTALADORES_WINDOWS=true` (nos dois repositórios).
-7. §6.3 — ensaio com `sha` e `tag` vazios (gera os três pacotes só como artifact).
+7. §6.3 — ensaio com `sha` e `tag` vazios (gera os pacotes na release móvel `prod-latest`).
 
 ### Reemitir para uma tag que já existe
 
