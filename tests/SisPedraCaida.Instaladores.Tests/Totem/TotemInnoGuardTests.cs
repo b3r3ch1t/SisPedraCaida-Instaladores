@@ -256,11 +256,18 @@ public class TotemInnoGuardTests
     }
 
     /// <summary>
-    /// Cada parâmetro do Inno alimenta exatamente um parâmetro do <c>Setup.exe</c>, e os quatro estão no runbook da
-    /// estação (<c>docs/TotemInstalacaoWindows.md</c> do backend), que é o contrato público com a TI.
+    /// Cada parâmetro do Inno alimenta exatamente um parâmetro do <c>Setup.exe</c>, e os quatro estão na lista do
+    /// cabeçalho do <c>pages.iss</c> ("Parâmetros do silencioso"), que é de onde o runbook do backend os copia.
     /// </summary>
+    /// <remarks>
+    /// Até 27/10/2026 esta guarda conferia o runbook do backend (<c>docs/TotemInstalacaoWindows.md</c>). Isso
+    /// acoplava o empacotamento à documentação do backend NA VERSÃO EMPACOTADA: a <c>prod</c> do backend (4.1.2) não
+    /// documentava <c>/CONTEUDOURL=</c>, e o job <c>testar</c> da reemissão de produção reprovaria por um texto
+    /// atrasado — o pacote em si estava certo. Documentação atrasada não quebra estação; a guarda fica com o que é
+    /// contrato (o mapeamento para o <c>Setup.exe</c>, conferido contra o C#) e com a lista deste repositório.
+    /// </remarks>
     [Fact]
-    public void ParametrosDoInno_NoIss_SaoOsDocumentadosNoBackend()
+    public void ParametrosDoInno_NoIss_MapeiamParaOSetup_EEstaoNoCabecalho()
     {
         var pages = Ler("pages.iss");
         var provisionamento = Ler("provisioning.iss");
@@ -278,12 +285,14 @@ public class TotemInnoGuardTests
             new[] { "APIURL=--api-url", "CONTEUDOURL=--conteudo-url", "LOCAL=--local", "NOME=--nome" },
             pares);
 
-        var runbook = LerDoBackend("docs", "TotemInstalacaoWindows.md");
-        foreach (var parametro in inno.Values)
-        {
-            Assert.True(runbook.Contains($"/{parametro}=", StringComparison.Ordinal),
-                $"/{parametro}= não está em docs/TotemInstalacaoWindows.md do backend.");
-        }
+        // O cabeçalho é o primeiro comentário { … } do arquivo; a lista vem depois de "Parâmetros do silencioso:".
+        var cabecalho = Regex.Match(pages, @"^\{[\s\S]*?Parâmetros do silencioso:(?<lista>[\s\S]*?)\n\s*\n").Groups["lista"].Value;
+        var declarados = Regex.Matches(cabecalho, @"/(?<parametro>[A-Z]+)=")
+            .Select(m => m.Groups["parametro"].Value)
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(inno.Values.OrderBy(p => p, StringComparer.Ordinal).ToArray(), declarados);
     }
 
     /// <summary>
