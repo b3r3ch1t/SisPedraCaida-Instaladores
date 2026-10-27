@@ -145,7 +145,7 @@ if ($pwshExe) {
     Add-Resultado 'PowerShell 7 (pwsh)' 'OK' ((Get-PrimeiraLinha 'pwsh' @('-NoProfile', '-Command', '$PSVersionTable.PSVersion.ToString()')) + " ($($pwshExe.Source))")
 }
 else {
-    Add-Resultado 'PowerShell 7 (pwsh)' 'FALHA' "ausente (esta sessão: $versaoPwsh). winget install --id Microsoft.PowerShell --scope machine"
+    Add-Resultado 'PowerShell 7 (pwsh)' 'FALHA' "ausente (esta sessão: $versaoPwsh). MSI da release oficial (PowerShell-X.Y.Z-win-x64.msi) ou scripts\preparar-runner-windows.ps1 — NÃO o winget de máquina (MSIX; armadilha r)"
 }
 
 # O SDK é resolvido pelo global.json do repositório: rodar na raiz é o que prova que a versão
@@ -204,7 +204,14 @@ try {
     $iscc = Resolve-IsccExecutavel
     # O ISCC.exe não carrega versão no VersionInfo (sai 0.0.0.0): a única fonte é o cabeçalho que ele
     # imprime ("Inno Setup 6 Command-Line Compiler"). /? sai com código ≠ 0, então não há checagem dele.
-    $cabecalho = ((& $iscc '/?' 2>&1) | Select-Object -First 1) -as [string]
+    # `Continue` só nesta chamada: o uso vai para o stderr, e no Windows PowerShell 5.1 com `Stop` o
+    # stderr de executável nativo vira exceção — o catch abaixo reportaria "não encontrado" com o ISCC
+    # instalado (reproduzido em 27/10/2026; mesma causa da armadilha g).
+    $eapAnterior = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $saidaIscc = & $iscc '/?' 2>&1 }
+    finally { $ErrorActionPreference = $eapAnterior }
+    $cabecalho = ($saidaIscc | Select-Object -First 1) -as [string]
     $versaoIscc = ([string]$cabecalho).Trim()
     $majorIscc = 0
     if ($versaoIscc -match 'Inno Setup (\d+)') { $majorIscc = [int]$Matches[1] }
