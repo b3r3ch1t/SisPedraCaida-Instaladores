@@ -31,15 +31,32 @@ backend** (que dispara este repositório) e o `instaladores-dev.yml` daqui só r
 
 ## 3. Preparar (como administrador, uma vez)
 
-Tudo **`--scope machine`**: o serviço do runner roda com outra conta, e o que foi instalado *por
+> **Atalho (27/10/2026):** [`scripts/preparar-runner-windows.ps1`](../scripts/preparar-runner-windows.ps1)
+> faz §3, a permissão dos caches de §5 e o registro de §4 de uma vez, idempotente, num PowerShell **de
+> administrador** (roda no 5.1 de uma máquina limpa). Pré-requisitos: `gh` autenticado com admin neste
+> repositório (o token de registro é pedido à API e vai direto ao `config.cmd`, sem ser impresso), o
+> pacote do runner extraído em `C:\actions-runner` e os caches de §5 montados.
+>
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File scripts\preparar-runner-windows.ps1
+> ```
+
+Tudo **em escopo de máquina**: o serviço do runner roda com outra conta, e o que foi instalado *por
 usuário* por quem preparou a máquina **não existe para ela**. É a causa nº 1 de "ISCC não encontrado".
 
 ```powershell
 winget install --id Microsoft.DotNet.SDK.10 --scope machine
-winget install --id Microsoft.PowerShell --scope machine
 winget install --id Git.Git --scope machine
 winget install --id JRSoftware.InnoSetup --scope machine
+# PowerShell 7: MSI da release oficial (PowerShell-X.Y.Z-win-x64.msi), msiexec /qn ADD_PATH=1
 ```
+
+⚠️ **PowerShell 7 não vai pelo winget.** O manifesto `Microsoft.PowerShell` com `--scope machine` é um
+`.msixbundle`: falha com `0x80070005 Access is denied` e, no caminho, **remove o pwsh da Store** de quem
+rodou (reproduzido em 27/10/2026). E o pwsh da Store, que mora em `%LOCALAPPDATA%\Microsoft\WindowsApps`,
+não existe para `NETWORK SERVICE` — todo `shell: pwsh` do workflow falharia. O MSI instala em
+`C:\Program Files\PowerShell\7` e põe a pasta no PATH da máquina; o script confere o SHA-256 do MSI contra
+o digest da release antes de instalar.
 
 ```powershell
 Set-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem LongPathsEnabled 1 -Type DWord
