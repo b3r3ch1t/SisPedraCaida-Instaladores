@@ -323,12 +323,16 @@ jobs:
       SERVICO: ${{ matrix.servico }}
       NOME: ${{ matrix.nome }}
       SCRIPT: ${{ matrix.script }}
-      PAYLOAD: ${{ matrix.payload }}
-      # Cache do payload de terceiro (QZ Tray) no runner — fora do git (PRD-INSTPROD-01).
+      # Payloads de terceiro da linha, declarados no manifesto (PRD-TOTEMINST-02): parâmetro do script,
+      # variável com a pasta do cache no runner, arquivo de hash. O passo "Empacotar" só itera esta lista.
+      PAYLOADS: ${{ toJson(matrix.payloads) }}
+      # As pastas dos caches, fora do git. ⚠️ O contexto `vars` não é enumerável em runtime: toda variável
+      # de payload do manifesto precisa de uma linha aqui (guarda TodaVariavelDePayload_EstaNosDoisWorkflows).
+      # QZ Tray (PRD-INSTPROD-01) e driver Bematech MP-4200 TH (PRD-PMTRAY-02) do PrintMonitor.
       PRINTMONITOR_PAYLOAD_DIR: ${{ vars.PRINTMONITOR_PAYLOAD_DIR }}
-      # Driver OBRIGATÓRIO da Bematech MP-4200 TH (.exe + driver.sha256), também no cache do runner
-      # (PRD-PMTRAY-02). ⚠️ A variável de repositório precisa existir: sem ela o job do PrintMonitor falha.
       PRINTMONITOR_DRIVERS_PAYLOAD_DIR: ${{ vars.PRINTMONITOR_DRIVERS_PAYLOAD_DIR }}
+      # Bootstrapper do WebView2 Runtime do totem (PRD-TOTEMINST-02).
+      TOTEM_WEBVIEW2_PAYLOAD_DIR: ${{ vars.TOTEM_WEBVIEW2_PAYLOAD_DIR }}
       # core.longpaths para TODO git deste job, sem depender da configuração global do runner: o
       # worktree materializa o backend inteiro sob RUNNER_TEMP, e PRDs com caminho comprido passam de
       # 260 caracteres — o `git worktree add` morre com "Filename too long" (reproduzido em 18/10/2026).
@@ -368,22 +372,21 @@ jobs:
             OutputDir      = Join-Path $base 'out'
           }
 
-          if ($env:PAYLOAD -eq 'true') {
-            # Pacote de campo sem o payload instalaria uma estação incompleta: aqui ele é obrigatório,
-            # mesmo que o script, no uso local, aceite empacotar sem.
-            if (-not $env:PRINTMONITOR_PAYLOAD_DIR -or
-                -not (Get-ChildItem -Path $env:PRINTMONITOR_PAYLOAD_DIR -Filter '*.exe' -File -ErrorAction SilentlyContinue)) {
-              throw "Payload ausente: defina a variável PRINTMONITOR_PAYLOAD_DIR apontando para o cache do QZ Tray no runner (PRD-INSTPROD-01)."
+          # Pacote de campo sem o payload instalaria uma estação incompleta: no CI TODO payload declarado no
+          # manifesto é obrigatório, mesmo que o script, no uso local, aceite empacotar sem (QZ Tray, WebView2).
+          # O hash é conferido pelo build-installer.ps1 (Resolve-PayloadVerificado); aqui só a mensagem diz
+          # qual variável criar.
+          # `ForEach-Object { $_ }` desdobra o array: o ConvertFrom-Json do Windows PowerShell 5.1 devolve o
+          # array como UM objeto, e o laço veria um único "payload" sem propriedades.
+          $payloads = @()
+          if ($env:PAYLOADS -and $env:PAYLOADS -ne 'null') { $payloads = @($env:PAYLOADS | ConvertFrom-Json | ForEach-Object { $_ }) }
+          foreach ($p in $payloads) {
+            $pasta = [Environment]::GetEnvironmentVariable($p.variavel)
+            if (-not $pasta -or -not (Get-ChildItem -Path $pasta -Filter '*.exe' -File -ErrorAction SilentlyContinue)) {
+              throw ("Payload ausente: defina a variável $($p.variavel) apontando para a pasta do runner com " +
+                     "$($p.descricao) e o $($p.hash). $($p.seAusente) Runbook: docs/RunnerWindowsInstaladores.md §5.")
             }
-            $parametros.PayloadDir = $env:PRINTMONITOR_PAYLOAD_DIR
-
-            # O driver da Bematech é obrigatório no pacote (PRD-PMTRAY-02): o build-installer.ps1 também
-            # reprova sem ele; aqui a mensagem diz qual variável criar.
-            if (-not $env:PRINTMONITOR_DRIVERS_PAYLOAD_DIR -or
-                -not (Get-ChildItem -Path $env:PRINTMONITOR_DRIVERS_PAYLOAD_DIR -Filter '*.exe' -File -ErrorAction SilentlyContinue)) {
-              throw "Payload do driver ausente: defina a variável PRINTMONITOR_DRIVERS_PAYLOAD_DIR apontando para a pasta do runner com o instalador da Bematech MP-4200 TH e o driver.sha256 (PRD-PMTRAY-02)."
-            }
-            $parametros.DriversPayloadDir = $env:PRINTMONITOR_DRIVERS_PAYLOAD_DIR
+            $parametros[$p.parametro] = $pasta
           }
 
           & (Join-Path $env:GITHUB_WORKSPACE $env:SCRIPT) @parametros

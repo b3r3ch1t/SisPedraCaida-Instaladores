@@ -146,7 +146,15 @@ public partial class InstaladoresCiArchitectureTests
                 problemas.Add($"'{instalador.Servico}': sem o canal '{CanalDeCampo}' — a release de produção sairia " +
                               "sem este instalador. Instalador só de desenvolvimento precisa mudar esta guarda.");
             }
+
+            problemas.AddRange(ProblemasDosPayloads(raiz, instalador));
         }
+
+        problemas.AddRange(manifesto.Instaladores
+            .SelectMany(i => i.Payloads)
+            .GroupBy(p => p.Variavel, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .Select(g => $"variável de payload '{g.Key}' repetida no manifesto: dois componentes no mesmo cache."));
 
         foreach (var pendente in manifesto.Pendentes)
         {
@@ -219,6 +227,100 @@ public partial class InstaladoresCiArchitectureTests
         Assert.Equal(noAgente.Groups[1].Value, noInstalador.Groups[1].Value);
     }
 
+    /// <summary>
+    /// Toda variável de payload do manifesto está no <c>env:</c> do job <c>empacotar</c> e no do diagnóstico do
+    /// runner (PRD-TOTEMINST-02).
+    /// </summary>
+    /// <remarks>
+    /// O contexto <c>vars</c> do Actions não é enumerável em runtime: o workflow só enxerga a variável que
+    /// declara. Payload novo no manifesto sem a linha no <c>env:</c> faz o job reprovar com "payload ausente"
+    /// mesmo com a variável criada no repositório — e o diagnóstico, que é o que deveria avisar antes, fica cego.
+    /// </remarks>
+    [Fact]
+    public void TodaVariavelDePayload_EstaNosDoisWorkflows()
+    {
+        var manifesto = Manifesto.Carregar(Raizes.Instaladores);
+        var workflows = new[] { "instaladores-windows.yml", "runner-windows-diagnostico.yml" };
+
+        var faltando = (
+            from payload in manifesto.Instaladores.SelectMany(i => i.Payloads)
+            from workflow in workflows
+            let texto = File.ReadAllText(Path.Combine(Raizes.Instaladores, ".github", "workflows", workflow))
+            where !Regex.IsMatch(texto, $@"(?m)^\s*{payload.Variavel}:\s*\$\{{\{{\s*vars\.{payload.Variavel}\s*\}}\}}\s*$")
+            select $"{payload.Variavel} ausente do env: de {workflow}").ToList();
+
+        Assert.True(faltando.Count == 0, string.Join(Environment.NewLine, faltando));
+    }
+
+    /// <summary>
+    /// O job <c>empacotar</c> itera os payloads da linha da matriz em vez de conhecer variáveis de serviço por nome.
+    /// </summary>
+    /// <remarks>
+    /// Até o PRD-TOTEMINST-02 o YAML lia <c>matrix.payload</c> (booleano) e, quando verdadeiro, as duas variáveis
+    /// do PrintMonitor por nome: um segundo serviço com payload viraria um <c>if</c> por serviço no YAML, a segunda
+    /// fonte de verdade que o manifesto existe para evitar (armadilha h).
+    /// </remarks>
+    [Fact]
+    public void Empacotar_IteraOsPayloadsDoManifesto()
+    {
+        var yml = File.ReadAllText(Path.Combine(Raizes.Instaladores, ".github", "workflows", "instaladores-windows.yml"));
+
+        Assert.Contains("PAYLOADS: ${{ toJson(matrix.payloads) }}", yml, StringComparison.Ordinal);
+        Assert.Contains("$env:PAYLOADS | ConvertFrom-Json", yml, StringComparison.Ordinal);
+        Assert.DoesNotContain("matrix.payload }}", yml, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"\$parametros\.(PayloadDir|DriversPayloadDir|WebView2BootstrapperPath)\s*=", yml);
+    }
+
+    /// <summary>
+    /// A linha do totem declara o bootstrapper do WebView2 com o parâmetro e o arquivo de hash que o
+    /// <c>build-installer.ps1</c> do totem usa — sem ele, o pacote de campo sai sem o runtime (PRD-TOTEMINST-02).
+    /// </summary>
+    [Fact]
+    public void Totem_DeclaraOBootstrapperDoWebView2()
+    {
+        var totem = Manifesto.Carregar(Raizes.Instaladores).Instaladores.SingleOrDefault(i => i.Servico == "totem");
+        Assert.NotNull(totem);
+
+        var webView2 = Assert.Single(totem!.Payloads);
+        Assert.Equal("WebView2BootstrapperPath", webView2.Parametro);
+        Assert.Equal("webview2.sha256", webView2.Hash);
+
+        var build = File.ReadAllText(Path.Combine(Raizes.Instaladores, totem.Script.Replace('/', Path.DirectorySeparatorChar)));
+        Assert.Contains($"-ArquivoHash '{webView2.Hash}'", build, StringComparison.Ordinal);
+    }
+
+    /// <summary>Problemas de forma dos payloads de uma linha do manifesto.</summary>
+    /// <param name="raiz">Raiz deste repositório.</param>
+    /// <param name="instalador">Linha do manifesto.</param>
+    /// <returns>Uma mensagem por problema.</returns>
+    private static IEnumerable<string> ProblemasDosPayloads(string raiz, Instalador instalador)
+    {
+        var caminhoDoScript = Path.Combine(raiz, instalador.Script.Replace('/', Path.DirectorySeparatorChar));
+        var script = File.Exists(caminhoDoScript) ? File.ReadAllText(caminhoDoScript) : string.Empty;
+
+        foreach (var payload in instalador.Payloads)
+        {
+            if (!VariavelDePayloadRegex().IsMatch(payload.Variavel ?? string.Empty))
+                yield return $"'{instalador.Servico}': variável de payload '{payload.Variavel}' fora de ^[A-Z][A-Z0-9_]*_PAYLOAD_DIR$.";
+
+            if (payload.Hash is null || !payload.Hash.EndsWith(".sha256", StringComparison.Ordinal))
+                yield return $"'{instalador.Servico}': payload '{payload.Variavel}' sem arquivo .sha256 em 'hash'.";
+
+            if (string.IsNullOrWhiteSpace(payload.Descricao) || string.IsNullOrWhiteSpace(payload.SeAusente))
+                yield return $"'{instalador.Servico}': payload '{payload.Variavel}' sem 'descricao' ou 'seAusente' (o diagnóstico fica mudo).";
+
+            // O job passa a pasta por splatting (`$parametros[<parametro>]`): parâmetro que o script não declara
+            // derruba o empacotamento com "A parameter cannot be found", só no runner.
+            if (string.IsNullOrWhiteSpace(payload.Parametro) ||
+                !Regex.IsMatch(script, $@"\[string\]\s*\${Regex.Escape(payload.Parametro)}\b", RegexOptions.IgnoreCase))
+                yield return $"'{instalador.Servico}': '{instalador.Script}' não declara o parâmetro [string] ${payload.Parametro}.";
+        }
+    }
+
+    /// <summary>Nome aceito para a variável de repositório de um cache de payload.</summary>
+    [GeneratedRegex("^[A-Z][A-Z0-9_]*_PAYLOAD_DIR$")]
+    private static partial Regex VariavelDePayloadRegex();
+
     /// <summary><c>ServiceName = "..."</c> do <c>UseWindowsService</c>.</summary>
     [GeneratedRegex("""ServiceName\s*=\s*"([^"]+)"\s*\)""")]
     private static partial Regex NomeServicoAgenteRegex();
@@ -278,7 +380,7 @@ public partial class InstaladoresCiArchitectureTests
             return manifesto! with
             {
                 Instaladores = (manifesto!.Instaladores ?? [])
-                    .Select(i => i with { Projetos = i.Projetos ?? [], Canais = i.Canais ?? [] })
+                    .Select(i => i with { Projetos = i.Projetos ?? [], Payloads = i.Payloads ?? [], Canais = i.Canais ?? [] })
                     .ToList(),
                 Pendentes = manifesto.Pendentes ?? []
             };
@@ -290,15 +392,23 @@ public partial class InstaladoresCiArchitectureTests
     /// <param name="Nome">Prefixo do executável gerado.</param>
     /// <param name="Script">Caminho do <c>build-installer.ps1</c>, relativo à raiz.</param>
     /// <param name="Projetos">Windows Services empacotados por este instalador.</param>
-    /// <param name="Payload">Se o instalador embute payload de terceiro vindo do cache do runner.</param>
+    /// <param name="Payloads">Binários de terceiro que o pacote embute a partir de um cache do runner (PRD-TOTEMINST-02).</param>
     /// <param name="Canais">Canais em que o CI empacota esta linha (<c>dev</c>, <c>prod</c>).</param>
     private sealed record Instalador(
         string Servico,
         string Nome,
         string Script,
         List<string> Projetos,
-        bool Payload,
+        List<Payload> Payloads,
         List<string> Canais);
+
+    /// <summary>Item de <c>payloads</c>: um binário de terceiro vindo do cache do runner.</summary>
+    /// <param name="Parametro">Parâmetro do <c>build-installer.ps1</c> que recebe a pasta do cache.</param>
+    /// <param name="Variavel">Variável de repositório com o caminho do cache (no <c>env:</c> dos workflows).</param>
+    /// <param name="Hash">Arquivo <c>.sha256</c> que pina o binário dentro da pasta.</param>
+    /// <param name="Descricao">Nome legível do componente, usado nas mensagens.</param>
+    /// <param name="SeAusente">Efeito de o cache faltar, para o diagnóstico do runner.</param>
+    private sealed record Payload(string Parametro, string Variavel, string Hash, string Descricao, string SeAusente);
 
     /// <summary>Linha de <c>pendentes</c>.</summary>
     /// <param name="Projeto">Windows Service sem instalador.</param>

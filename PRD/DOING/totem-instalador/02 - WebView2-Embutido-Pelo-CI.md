@@ -1,6 +1,6 @@
 # PRD-TOTEMINST-02 — WebView2 embutido pelo CI
 
-> **Status:** Planejado — **Última atualização:** 27/10/2026 14:57
+> **Status:** Em andamento — código, guardas e docs prontos; faltam o cache e a variável no runner e o run pós-merge — **Última atualização:** 27/10/2026 17:00
 
 ## Objetivo
 
@@ -128,3 +128,49 @@ $h = (Get-FileHash "$pasta\MicrosoftEdgeWebview2Setup.exe" -Algorithm SHA256).Ha
    (`scripts/preparar-runner-windows.ps1` da branch, como administrador, ou `icacls` direto).
 2. GitHub → Settings → Variables deste repositório: `TOTEM_WEBVIEW2_PAYLOAD_DIR = C:\ci-cache\totem-webview2`.
 3. `runner-windows-diagnostico.yml` da branch verde.
+
+## Entregue (27/10/2026)
+
+- Manifesto com `payloads` nas quatro linhas (TEF e balança `[]`, PrintMonitor com os dois, totem com o
+  WebView2) e `_comentario` atualizado.
+- `instaladores-windows.yml`, job `empacotar`: `PAYLOADS: ${{ toJson(matrix.payloads) }}`, a linha
+  `TOTEM_WEBVIEW2_PAYLOAD_DIR` no `env:` e o laço único no lugar do `if ($env:PAYLOAD -eq 'true')`. O laço
+  desdobra o array com `ForEach-Object { $_ }`, porque o `ConvertFrom-Json` do Windows PowerShell 5.1 devolve o
+  array como um objeto só (achado na simulação, ver abaixo). O resumo do job não ganhou linha própria do
+  WebView2: o `build-installer.ps1` já imprime `WebView2:` no log do passo.
+- `runner-windows-diagnostico.ps1` itera o manifesto; `-WebView2PayloadDir` entrou como override.
+  `runner-windows-diagnostico.yml` com a variável no `env:`.
+- `preparar-runner-windows.ps1` com `-WebView2PayloadDir` no `icacls`.
+- `installer/totem/payload-webview2/README.md` + `.gitignore`.
+- Guardas em `InstaladoresCiArchitectureTests`: forma de cada payload em `TodaLinhaDoManifesto_EstaViva`,
+  `TodaVariavelDePayload_EstaNosDoisWorkflows`, `Empacotar_IteraOsPayloadsDoManifesto` e
+  `Totem_DeclaraOBootstrapperDoWebView2`. O `build-installer.ps1` do totem não mudou.
+- Docs: runbook (§5 com três payloads, §5.3 nova, §6 e §7), build local e `CLAUDE.md` (linha do totem,
+  variável, armadilha **f** reescrita, **t** nova).
+
+### Verificação
+
+| O quê | Resultado |
+|---|---|
+| Guardas (`dotnet test`, backend `origin/dev`) | **88/88** (eram 85) |
+| Pester | 60/60 |
+| Laço do `empacotar` simulado com o manifesto real, pwsh 7 e 5.1 | TEF e balança sem parâmetro; PrintMonitor com `PayloadDir` + `DriversPayloadDir`; totem com `WebView2BootstrapperPath`; cache ausente ⇒ "Payload ausente" nomeando a variável |
+| Diagnóstico local, cinco cenários | sem cache ⇒ `AVISO`; sem `webview2.sha256` ⇒ `FALHA`; hash certo ⇒ `OK`; `-ExigirPayload` ⇒ ausente vira `FALHA`; igual no 5.1 |
+| Build local do totem com `-WebView2BootstrapperPath` | `TotemSetup-4.3.0.exe` compilado, log com `WebView2:   bootstrapper embutido`. Feito com um `.exe` **falso** num cache temporário (prova a canalização, não o binário da Microsoft); pacote apagado depois |
+
+### Prova por mutação (revertida)
+
+| Mutação | Reprovou |
+|---|---|
+| Diagnóstico sem a linha `TOTEM_WEBVIEW2_PAYLOAD_DIR` | `TodaVariavelDePayload_…` |
+| `empacotar` volta a `PAYLOAD: ${{ matrix.payload }}` | `Empacotar_…` |
+| `empacotar` com `$parametros.WebView2BootstrapperPath = …` por nome | `Empacotar_…` |
+| Totem com `payloads: []` | `Totem_Declara…` |
+| `parametro` que o script não declara | `Totem_Declara…` e `TodaLinhaDoManifesto_…` |
+| Variável de payload repetida | `TodaLinhaDoManifesto_…` |
+
+### Fica para depois do PR (critérios 4 e 5)
+
+O cache não é visível desta sessão (`C:\ci-cache` não existe para ela) e montá-lo exige administrador no
+runner. As pendências operacionais acima continuam, e o PR **não pode ser mesclado** antes delas: o push na
+`dev` dispara o `instaladores-dev.yml`, e sem a variável o job do totem reprova.

@@ -30,14 +30,21 @@
     `$env:PRINTMONITOR_DRIVERS_PAYLOAD_DIR`. Componente **obrigatório** desde o PRD-PMTRAY-02: sem ele
     o build do PrintMonitor falha, diferente do QZ Tray, que só sai do pacote.
 
+.PARAMETER WebView2PayloadDir
+    Cache do bootstrapper do WebView2 Runtime do totem (`MicrosoftEdgeWebview2Setup.exe` +
+    `webview2.sha256`). Padrão: `$env:TOTEM_WEBVIEW2_PAYLOAD_DIR` (PRD-TOTEMINST-02).
+
+    Os três parâmetros de pasta são só overrides: a LISTA de payloads conferidos vem do manifesto
+    (`installer/instaladores-ci.json`, campo `payloads`), e cada um é lido da variável declarada lá.
+
 .PARAMETER BackendRoot
     Checkout do SisPedraCaida-Backend (SDK do `global.json` e projetos de `src/`). Padrão: a mesma
     descoberta dos `build-installer.ps1` (`SISPEDRACAIDA_BACKEND`, `backend/`, repositório irmão).
 
 .PARAMETER ExigirPayload
-    Payload ausente vira FALHA (no CI os dois são necessários para o pacote do PrintMonitor). Sem o
-    switch, vira AVISO — útil para conferir a máquina antes de montar os caches, ou quando só se vai
-    empacotar o agente TEF e a balança, que não têm payload.
+    Payload ausente vira FALHA (no CI todo payload do manifesto é obrigatório). Sem o switch, vira
+    AVISO — útil para conferir a máquina antes de montar os caches, ou quando só se vai empacotar o
+    agente TEF e a balança, que não têm payload.
 
 .EXAMPLE
     pwsh scripts/runner-windows-diagnostico.ps1 -PayloadDir C:\ci-cache\printmonitor-payload
@@ -50,6 +57,7 @@ param(
     [string] $BaseDir = '',
     [string] $PayloadDir = '',
     [string] $DriversPayloadDir = '',
+    [string] $WebView2PayloadDir = '',
     [switch] $ExigirPayload,
     [string] $BackendRoot = ''
 )
@@ -66,8 +74,14 @@ $backendRoot = Resolve-RaizDoBackend -RepoRoot $repoRoot -BackendRoot $BackendRo
 if (-not $BaseDir) {
     $BaseDir = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { 'C:\actions-runner\_work\_temp' }
 }
-if (-not $PayloadDir) { $PayloadDir = [string]$env:PRINTMONITOR_PAYLOAD_DIR }
-if (-not $DriversPayloadDir) { $DriversPayloadDir = [string]$env:PRINTMONITOR_DRIVERS_PAYLOAD_DIR }
+
+# Overrides de linha de comando, pela variável que o manifesto declara para cada cache. Sem override, a
+# pasta vem da própria variável de ambiente (no Actions, do `env:` do workflow).
+$overridesDePayload = @{
+    'PRINTMONITOR_PAYLOAD_DIR'         = $PayloadDir
+    'PRINTMONITOR_DRIVERS_PAYLOAD_DIR' = $DriversPayloadDir
+    'TOTEM_WEBVIEW2_PAYLOAD_DIR'       = $WebView2PayloadDir
+}
 
 # Limite do MSBuild/Win32 sem prefixo \\?\: 260 com o terminador, ou seja, 259 caracteres úteis.
 $limiteCaminho = 259
@@ -290,23 +304,27 @@ else {
         'O dotnet publish falharia com MSB3030. Reinstale o runner num diretório curto (ex.: C:\actions-runner).')
 }
 
-# ---------- payloads do PrintMonitor ----------
+# ---------- payloads de terceiros ----------
 
-# São DOIS, e com consequências diferentes: sem o QZ Tray o instalador sai sem o componente; sem o
-# driver da Bematech o build FALHA (`Resolve-PayloadVerificado -Obrigatorio` + `#error` no .iss, desde
-# o PRD-PMTRAY-02). Até 22/10/2026 o diagnóstico só conferia o primeiro, e máquina "pronta" aqui ainda
-# reprovava o PrintMonitorSetup lá — a lacuna que o PRD-INSTDEV-04 fechou.
+# A lista vem do MANIFESTO (`payloads` de cada linha, PRD-TOTEMINST-02), a mesma que o job `empacotar`
+# itera: payload novo é conferido aqui sem mexer neste script. Até 22/10/2026 o diagnóstico conferia só
+# o QZ Tray, e máquina "pronta" aqui ainda reprovava o PrintMonitorSetup lá (PRD-INSTDEV-04); até
+# 27/10/2026 conhecia os dois do PrintMonitor por nome, e o WebView2 do totem ficaria de fora.
 $estadoSemPayload = if ($ExigirPayload) { 'FALHA' } else { 'AVISO' }
 
-$qz = Test-PayloadDoRunner -PayloadDir $PayloadDir -ArquivoHash 'payload.sha256' `
-    -Descricao 'o QZ Tray' -Variavel 'PRINTMONITOR_PAYLOAD_DIR' `
-    -EstadoSeAusente $estadoSemPayload -EfeitoSeAusente 'O pacote do PrintMonitor sairia sem o QZ Tray.'
-Add-Resultado 'Payload do QZ Tray' $qz.Estado $qz.Detalhe
+foreach ($instalador in $manifesto.instaladores) {
+    foreach ($p in @($instalador.payloads)) {
+        if (-not $p) { continue }
 
-$driver = Test-PayloadDoRunner -PayloadDir $DriversPayloadDir -ArquivoHash 'driver.sha256' `
-    -Descricao 'o driver da Bematech MP-4200 TH' -Variavel 'PRINTMONITOR_DRIVERS_PAYLOAD_DIR' `
-    -EstadoSeAusente $estadoSemPayload -EfeitoSeAusente 'O build do PrintMonitor FALHA sem ele (obrigatório desde PRD-PMTRAY-02).'
-Add-Resultado 'Payload do driver Bematech' $driver.Estado $driver.Detalhe
+        $pasta = [string]$overridesDePayload[[string]$p.variavel]
+        if (-not $pasta) { $pasta = [string][Environment]::GetEnvironmentVariable([string]$p.variavel) }
+
+        $r = Test-PayloadDoRunner -PayloadDir $pasta -ArquivoHash $p.hash `
+            -Descricao $p.descricao -Variavel $p.variavel `
+            -EstadoSeAusente $estadoSemPayload -EfeitoSeAusente $p.seAusente
+        Add-Resultado "Payload ($($instalador.servico))" $r.Estado "$($p.descricao): $($r.Detalhe)"
+    }
+}
 
 # ---------- saída ----------
 
