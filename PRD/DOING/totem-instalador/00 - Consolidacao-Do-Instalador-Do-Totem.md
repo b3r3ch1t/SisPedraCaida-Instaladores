@@ -1,6 +1,6 @@
 # PRD-TOTEMINST-00 — Consolidação do instalador do totem no SisPedraCaida-Instaladores (Master)
 
-> **Status:** Em andamento (PRD-01 implementado, aguardando o backend #1272) — **Última atualização:** 27/10/2026 15:55
+> **Status:** Em andamento — 01, 02 e 03 implementados; faltam o cache e a variável do WebView2 no runner, o merge e o run da `dev` — **Última atualização:** 27/10/2026 17:15
 
 ## Objetivo
 

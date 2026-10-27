@@ -1,6 +1,6 @@
 # PRD-TOTEMINST-03 — Documentação cruzada e sincronização
 
-> **Status:** Planejado — §3 (`CLAUDE.md` da raiz, menção ao totem) adiantado em 27/10/2026 — **Última atualização:** 27/10/2026 14:57
+> **Status:** Em andamento — §1, §3 e a sincronização feitos; #1275 do backend aberta, aguardando o merge do épico — **Última atualização:** 27/10/2026 17:15
 
 ## Objetivo
 
@@ -66,3 +66,15 @@ Cabeçalho final do épico: data, "épico `totem-instalador`", link para `PRD/DO
 2. `grep -i totem C:\repos\SisPedraCaida\CLAUDE.md` mostra o totem na linha do Instaladores e no callout.
 3. Os dois clones locais na `dev`, sem commits atrás da `origin/dev`.
 4. O master e as três etapas em `PRD/DONE/totem-instalador/`.
+
+## Entregue (27/10/2026)
+
+| Item | Estado |
+|---|---|
+| §1 — backend: `/CONTEUDOURL=` no runbook | [b3r3ch1t/SisPedraCaida-Backend#1272](https://github.com/b3r3ch1t/SisPedraCaida-Backend/pull/1272) **mesclada** (15:09 UTC) |
+| §2 — backend: §1 e §6 do runbook dizem que o pacote do CI traz o WebView2 | [b3r3ch1t/SisPedraCaida-Backend#1275](https://github.com/b3r3ch1t/SisPedraCaida-Backend/pull/1275) **aberta**; mesclar depois da PR deste épico e do primeiro `TotemSetup` com WebView2 em `dev-latest` |
+| §3 — `C:\repos\SisPedraCaida\CLAUDE.md` | feito: totem na tabela, callout com as guardas, o runbook como contrato e o WebView2/`payloads` |
+| §4 — `CLAUDE.md` deste repositório | cabeçalho do PRD-01 e do PRD-02 feitos; o do fechamento entra com o master em `DONE` |
+| Pendência 1 — clones locais | feito: `SisPedraCaida-Instaladores` saiu da `fix/permissoes-instaladores-dev` para a `dev`; `SisPedraCaida-Backend` avançou 43 commits na `dev` (`pull --ff-only`). A pasta não versionada `src/SisPedraCaida.Balanca.Agent/Properties/` do backend foi preservada |
+| Pendência 2 — cache e variável no runner | **aberta** (PRD-02): `C:\ci-cache` não é visível desta sessão e a montagem exige administrador |
+| Pendência 3 — herdadas do PRD-RUNWIN-01 | só citadas, como previsto |
