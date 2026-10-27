@@ -1,10 +1,13 @@
 # SisPedraCaida-Instaladores — Guia
 
-> **Última atualização deste CLAUDE.md:** 27/10/2026 13:13 (horário local, UTC-3) — instalador do **agente da balança
+> **Última atualização deste CLAUDE.md:** 27/10/2026 15:54 (horário local, UTC-3) — o `TotemSetup` **de campo já traz o
+> WebView2**: a promoção `dev` → `prod` aconteceu (`42c251a`) e `prod-v4.1.2` tem o `TotemSetup-4.1.2.exe` com o
+> bootstrapper; ⚠️ `prod-latest` ainda serve o `TotemSetup-3.19.5.exe` antigo — campo baixa sempre de `prod-vX.Y.Z`
+> · antes (27/10/2026 13:13): instalador do **agente da balança
 > removido** (a integração saiu do backend) · antes (27/10/2026 18:10): armadilha **(u)**: guarda
 > não lê documentação do backend (bloqueava a reemissão de prod) · antes (27/10/2026 17:55): épico **`totem-instalador`
 > concluído** ([`PRD/DONE/totem-instalador/`](PRD/DONE/totem-instalador/)): `TotemSetup` com WebView2 em `dev-latest`;
-> o de campo passa a trazê-lo na próxima promoção `dev` → `prod` · antes (27/10/2026 16:40): **WebView2 do totem
+> o de campo passaria a trazê-lo na promoção `dev` → `prod` seguinte (já feita) · antes (27/10/2026 16:40): **WebView2 do totem
 > obrigatório no CI** e payloads declarados no manifesto (PRD-TOTEMINST-02, armadilhas **f** e **t**) · antes
 > (27/10/2026 15:55): guardas `.iss` × C# do
 > **totem** (PRD-TOTEMINST-01, `tests/…/Totem/`) e totem na política de upgrade comum · antes (27/10/2026 08:45):
