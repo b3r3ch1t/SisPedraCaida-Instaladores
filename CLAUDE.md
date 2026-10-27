@@ -19,7 +19,6 @@ pipeline que os gera e publica. Comunicação, docs, commits e PRDs em **portugu
 |---|---|---|---|
 | `TefAgentSetup-X.Y.Z.exe` | `Tef.Agent` + `Tef.Agent.Setup` + `Tef.Agent.Tray` | [`installer/tefagent/build-installer.ps1`](installer/tefagent/build-installer.ps1) | dev, prod |
 | `PrintMonitorSetup-X.Y.Z.exe` | `PrintMonitor.{Service,Setup,Helper,Bootstrapper,Tray}` | [`installer/printmonitor/build-installer.ps1`](installer/printmonitor/build-installer.ps1) | dev, prod |
-| `BalancaAgentSetup-X.Y.Z.exe` | `Balanca.Agent` | [`installer/balanca/build-installer.ps1`](installer/balanca/build-installer.ps1) | prod |
 | `TotemSetup-X.Y.Z.exe` | `Totem.Agent` + `Totem.Setup` + `Totem.Shell` (publish no próprio script; WebView2 opcional, fora do CI) | [`installer/totem/build-installer.ps1`](installer/totem/build-installer.ps1) | dev, prod |
 
 A matriz é **[`installer/instaladores-ci.json`](installer/instaladores-ci.json)** — nunca o YAML.
@@ -44,7 +43,6 @@ workflows. Consequências:
 - Os docs **do que o instalador faz na estação** ficaram no backend, ao lado do código que provisiona:
   [`TefAgentInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/TefAgentInstalador.md),
   [`PrintMonitorInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/PrintMonitorInstalador.md),
-  [`BalancaAgentInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/BalancaAgentInstalador.md),
   [`TotemInstalacaoWindows.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/TotemInstalacaoWindows.md)
   e as armadilhas **#78, #101, #104, #112, #119** do `CLAUDE.md` de lá. **Leia o doc do agente antes de mexer
   no `.iss` dele.**
@@ -56,7 +54,7 @@ installer/
 ├── instaladores-ci.json        # matriz do CI por canal (fonte única; guarda InstaladoresCiArchitectureTests)
 ├── assets/sispedracaida.ico
 ├── common/                     # Empacotamento.psm1 (núcleo) + Pester + montar-instalador.ps1
-├── tefagent/  printmonitor/  balanca/  totem/   # .iss + includes + build-installer.ps1 (+ payloads fora do git)
+├── tefagent/  printmonitor/  totem/   # .iss + includes + build-installer.ps1 (+ payloads fora do git)
 scripts/runner-windows-diagnostico.ps1   # pré-requisitos do runner Windows
 scripts/preparar-runner-windows.ps1      # prepara e registra o runner (admin, idempotente)
 tests/SisPedraCaida.Instaladores.Tests/  # guardas .iss × C# do backend (xUnit, net10.0-windows)

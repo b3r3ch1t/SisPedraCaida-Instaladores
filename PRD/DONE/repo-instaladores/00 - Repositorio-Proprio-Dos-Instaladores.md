@@ -5,7 +5,7 @@
 ## Objetivo
 
 Tirar do `SisPedraCaida-Backend` os instaladores Inno Setup dos agentes de estação (TEF, PrintMonitor,
-balança, totem), o núcleo de empacotamento, o manifesto da matriz, o diagnóstico do runner, as guardas `.iss`
+totem), o núcleo de empacotamento, o manifesto da matriz, o diagnóstico do runner, as guardas `.iss`
 × C# e os workflows de empacotamento, e recriá-los aqui, sem perder nenhuma rotina de CI/CD existente.
 
 ## Decisões

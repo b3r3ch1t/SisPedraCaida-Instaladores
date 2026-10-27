@@ -37,7 +37,7 @@
 .PARAMETER ExigirPayload
     Payload ausente vira FALHA (no CI os dois são necessários para o pacote do PrintMonitor). Sem o
     switch, vira AVISO — útil para conferir a máquina antes de montar os caches, ou quando só se vai
-    empacotar o agente TEF e a balança, que não têm payload.
+    empacotar o agente TEF, que não tem payload.
 
 .EXAMPLE
     pwsh scripts/runner-windows-diagnostico.ps1 -PayloadDir C:\ci-cache\printmonitor-payload
