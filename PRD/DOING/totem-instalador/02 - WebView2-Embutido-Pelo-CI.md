@@ -1,6 +1,6 @@
 # PRD-TOTEMINST-02 — WebView2 embutido pelo CI
 
-> **Status:** Em andamento — código, guardas e docs prontos; faltam o cache e a variável no runner e o run pós-merge — **Última atualização:** 27/10/2026 17:00
+> **Status:** Em andamento — critérios 1 a 4 fechados (cache, variável e diagnóstico verdes no runner); falta o run da `dev` depois do merge da #8 — **Última atualização:** 27/10/2026 17:35
 
 ## Objetivo
 
@@ -169,8 +169,17 @@ $h = (Get-FileHash "$pasta\MicrosoftEdgeWebview2Setup.exe" -Algorithm SHA256).Ha
 | `parametro` que o script não declara | `Totem_Declara…` e `TodaLinhaDoManifesto_…` |
 | Variável de payload repetida | `TodaLinhaDoManifesto_…` |
 
-### Fica para depois do PR (critérios 4 e 5)
+### Pendências operacionais — feitas em 27/10/2026
 
-O cache não é visível desta sessão (`C:\ci-cache` não existe para ela) e montá-lo exige administrador no
-runner. As pendências operacionais acima continuam, e o PR **não pode ser mesclado** antes delas: o push na
-`dev` dispara o `instaladores-dev.yml`, e sem a variável o job do totem reprova.
+O runner `instaladores-win-01` roda noutra máquina (`PC_ANDERSON`), fora do alcance desta sessão. O cache foi
+montado **pelo próprio runner**, num job de uso único (branch `ops/cache-webview2-totem`, apagada depois): a conta
+`NETWORK SERVICE` cria subpasta em `C:\ci-cache` pela herança padrão do `C:\`, sem precisar de administrador.
+
+| Pendência | Resultado |
+|---|---|
+| 1. Cache `C:\ci-cache\totem-webview2` | `MicrosoftEdgeWebview2Setup.exe` (1.888.472 bytes) baixado do fwlink oficial; assinatura `Valid`, `CN=Microsoft Corporation`; `webview2.sha256` = `ca4c9016c70e2184c5e231662e0e98abf4826647180ef3faab32fcb1ca2ec15e` ([run 40531266929](https://github.com/b3r3ch1t/SisPedraCaida-Instaladores/actions/runs/40531266929)) |
+| 2. Variável `TOTEM_WEBVIEW2_PAYLOAD_DIR` | criada = `C:\ci-cache\totem-webview2` |
+| 3. Diagnóstico da branch | **verde**: os três payloads `OK`, Pester 60/60 ([run 40531366678](https://github.com/b3r3ch1t/SisPedraCaida-Instaladores/actions/runs/40531366678)) |
+
+Critério 4 fechado. Falta só o 5: depois do merge da #8, o run do `instaladores-dev.yml` com o `TotemSetup` em
+`dev-latest` trazendo a linha `WebView2:   bootstrapper embutido`.

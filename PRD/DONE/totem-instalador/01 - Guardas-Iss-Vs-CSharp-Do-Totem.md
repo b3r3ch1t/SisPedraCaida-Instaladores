@@ -1,6 +1,6 @@
 # PRD-TOTEMINST-01 — Guardas `.iss` × C# do totem
 
-> **Status:** Em andamento — código e testes prontos; falta o `ci.yml` verde no PR, que depende do backend #1272 — **Última atualização:** 27/10/2026 15:55
+> **Status:** Concluído — **Última atualização:** 27/10/2026 17:35
 
 ## Objetivo
 
@@ -100,7 +100,7 @@ Pasta do instalador: `installer/totem`. Helper `Ler(arquivo)` igual ao das outra
 ## Entregue (27/10/2026)
 
 - Pré-requisito no backend: PR [b3r3ch1t/SisPedraCaida-Backend#1272](https://github.com/b3r3ch1t/SisPedraCaida-Backend/pull/1272)
-  (`docs/totem-conteudourl`), com a tabela dos quatro parâmetros do silencioso no runbook. **Aberta, não mesclada.**
+  (`docs/totem-conteudourl`), com a tabela dos quatro parâmetros do silencioso no runbook. **Mesclada** em 27/10/2026.
 - `ProjectReference` a `Totem.Agent` e `Totem.Setup`. O plano B (D4) não foi necessário: compila e roda.
 - `Totem/TotemInnoGuardTests.cs`: 14 métodos, 21 casos com os vetores da normalização. Além do previsto, o teste
   dos parâmetros do Setup simula a linha que o `.iss` monta (`--nome "AUTO-02"`, `--conteudo-url=`) e confere que o
@@ -123,5 +123,6 @@ Pasta do instalador: `installer/totem`. Helper `Ler(arquivo)` igual ao das outra
 | AppId trocado no `Totem.iss` | `AppId_…` |
 | `PrepararUpgrade` chamando `--uninstall` | `PrepareToInstall_…` |
 
-⚠️ Até o #1272 mesclar, o `ci.yml` deste PR reprova `ParametrosDoInno_NoIss_SaoOsDocumentadosNoBackend`: ele roda
-contra a `dev` do backend, que ainda não documenta `/CONTEUDOURL=`.
+Critério 4 fechado: o `ci.yml` da [#8](https://github.com/b3r3ch1t/SisPedraCaida-Instaladores/pull/8)
+(`windows-latest`, guardas contra a `dev` do backend já com o #1272) passou em 3m12s, com commitlint, título e
+GitGuardian verdes.
