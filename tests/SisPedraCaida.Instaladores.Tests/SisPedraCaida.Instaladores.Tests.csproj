@@ -64,4 +64,15 @@
     <ProjectReference Include="$(BackendDir)src\SisPedraCaida.PrintMonitor.Setup\SisPedraCaida.PrintMonitor.Setup.csproj" />
   </ItemGroup>
 
+  <!--
+    Totem (PRD-TOTEMINST-01): o Totem.iss espelha nome do serviço, executáveis, pasta de dados, códigos de
+    saída e parâmetros do Setup.exe, a rota da sonda e a normalização da URL. Agent e Setup são net10.0 puro,
+    consumíveis daqui como o PrintMonitor.Setup. A casca (SisPedraCaida.Totem.Shell) NUNCA entra aqui: ela é
+    WinForms com WebView2, sem decisão, e o backend proíbe teste que a referencie (TotemArchitectureTests).
+  -->
+  <ItemGroup>
+    <ProjectReference Include="$(BackendDir)src\SisPedraCaida.Totem.Agent\SisPedraCaida.Totem.Agent.csproj" />
+    <ProjectReference Include="$(BackendDir)src\SisPedraCaida.Totem.Setup\SisPedraCaida.Totem.Setup.csproj" />
+  </ItemGroup>
+
 </Project>

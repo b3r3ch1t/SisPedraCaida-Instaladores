@@ -1,12 +1,12 @@
 {
-  "_comentario": "Fonte unica da matriz de instaladores do CI, por canal (PRD-INSTPROD-02/04 + PRD-INSTDEV-01). Todo projeto de src/ que se registra como Windows Service (UseWindowsService/AddWindowsService) precisa aparecer em 'instaladores[].projetos' ou, enquanto o instalador nao existe, em 'pendentes' com o PRD que o entrega. 'canais' diz em QUAIS canais o CI empacota a linha ('dev' e/ou 'prod'); 'prod' e obrigatorio em todas, porque e o canal de campo. Filtrar servico no YAML em vez de aqui criaria uma segunda fonte de verdade, cega a esta guarda. Cobrado por InstaladoresCiArchitectureTests.",
+  "_comentario": "Fonte unica da matriz de instaladores do CI, por canal (PRD-INSTPROD-02/04 + PRD-INSTDEV-01). Todo projeto de src/ que se registra como Windows Service (UseWindowsService/AddWindowsService) precisa aparecer em 'instaladores[].projetos' ou, enquanto o instalador nao existe, em 'pendentes' com o PRD que o entrega. 'canais' diz em QUAIS canais o CI empacota a linha ('dev' e/ou 'prod'); 'prod' e obrigatorio em todas, porque e o canal de campo. 'payloads' (PRD-TOTEMINST-02) declara cada binario de terceiro que o pacote embute a partir de um cache do runner: 'parametro' do build-installer.ps1 que recebe a pasta, 'variavel' de repositorio com o caminho do cache, 'hash' (arquivo .sha256 na pasta), 'descricao' e 'seAusente' (o efeito, para o diagnostico). No CI todo payload declarado e OBRIGATORIO; o job empacotar e o diagnostico so iteram esta lista, e toda 'variavel' precisa estar no env: dos dois workflows. Filtrar servico ou payload no YAML em vez de aqui criaria uma segunda fonte de verdade, cega a esta guarda. Cobrado por InstaladoresCiArchitectureTests.",
   "instaladores": [
     {
       "servico": "tefagent",
       "nome": "TefAgentSetup",
       "script": "installer/tefagent/build-installer.ps1",
       "projetos": ["SisPedraCaida.Tef.Agent"],
-      "payload": false,
+      "payloads": [],
       "canais": ["dev", "prod"]
     },
     {
@@ -14,7 +14,22 @@
       "nome": "PrintMonitorSetup",
       "script": "installer/printmonitor/build-installer.ps1",
       "projetos": ["SisPedraCaida.PrintMonitor.Service"],
-      "payload": true,
+      "payloads": [
+        {
+          "parametro": "PayloadDir",
+          "variavel": "PRINTMONITOR_PAYLOAD_DIR",
+          "hash": "payload.sha256",
+          "descricao": "o QZ Tray",
+          "seAusente": "O pacote do PrintMonitor sairia sem o QZ Tray."
+        },
+        {
+          "parametro": "DriversPayloadDir",
+          "variavel": "PRINTMONITOR_DRIVERS_PAYLOAD_DIR",
+          "hash": "driver.sha256",
+          "descricao": "o driver da Bematech MP-4200 TH",
+          "seAusente": "O build do PrintMonitor FALHA sem ele (obrigatorio desde PRD-PMTRAY-02)."
+        }
+      ],
       "canais": ["dev", "prod"]
     },
     {
@@ -22,7 +37,15 @@
       "nome": "TotemSetup",
       "script": "installer/totem/build-installer.ps1",
       "projetos": ["SisPedraCaida.Totem.Agent"],
-      "payload": false,
+      "payloads": [
+        {
+          "parametro": "WebView2BootstrapperPath",
+          "variavel": "TOTEM_WEBVIEW2_PAYLOAD_DIR",
+          "hash": "webview2.sha256",
+          "descricao": "o bootstrapper do WebView2 Runtime",
+          "seAusente": "O pacote do totem sairia sem o WebView2 e a tela ficaria 'fora de servico' em maquina sem o runtime."
+        }
+      ],
       "canais": ["dev", "prod"]
     }
   ],

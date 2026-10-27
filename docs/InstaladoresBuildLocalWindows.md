@@ -1,6 +1,7 @@
 # Gerar os instaladores Windows localmente
 
-> **Última atualização:** 23/10/2026 17:30 (horário local, UTC-3) — instaladores em repositório próprio:
+> **Última atualização:** 27/10/2026 16:40 (horário local, UTC-3) — WebView2 do totem: opcional no build
+> local, obrigatório no CI (PRD-TOTEMINST-02). Antes (23/10/2026 17:30): instaladores em repositório próprio:
 > os scripts rodam **neste** repositório e pinam o código do agente num clone do backend (`-BackendRoot`,
 > §3). Antes (22/10/2026 16:35): PRD-INSTDEV-04.
 
@@ -161,8 +162,11 @@ pwsh installer/tefagent/build-installer.ps1 -UseWorkingTree -SkipPublish -DryRun
 pwsh installer/tefagent/build-installer.ps1 -Ref <sha> -Version 3.10.0
 ```
 
-O totem segue o molde do (1), com o bootstrapper do WebView2 opcional (sem ele o pacote sai sem o runtime e a checagem só avisa):
-`pwsh installer/totem/build-installer.ps1 -Ref origin/dev -WebView2BootstrapperPath <pasta com o .exe e o webview2.sha256>`.
+O totem segue o molde do (1), com o bootstrapper do WebView2 **opcional no build local** (sem ele o pacote sai sem o runtime e a
+checagem só avisa): `pwsh installer/totem/build-installer.ps1 -Ref origin/dev -WebView2BootstrapperPath C:\ci-cache\totem-webview2`
+(pasta com o `MicrosoftEdgeWebview2Setup.exe` e o `webview2.sha256`; receita em
+[`installer/totem/payload-webview2/README.md`](../installer/totem/payload-webview2/README.md)). **No CI ele é
+obrigatório** desde o PRD-TOTEMINST-02: o pacote de campo sempre o traz.
 
 **Saída:** `artifacts/installer/<Nome>-<versão>.exe` + `<Nome>-<versão>.exe.sha256`, com
 `<Nome>` ∈ { `TefAgentSetup`, `PrintMonitorSetup`, `TotemSetup` }. O hash é a **única prova de

@@ -1,6 +1,14 @@
 # SisPedraCaida-Instaladores — Guia
 
-> **Última atualização deste CLAUDE.md:** 27/10/2026 08:45 (horário local, UTC-3) — runner Windows registrado e
+> **Última atualização deste CLAUDE.md:** 27/10/2026 13:13 (horário local, UTC-3) — instalador do **agente da balança
+> removido** (a integração saiu do backend) · antes (27/10/2026 18:10): armadilha **(u)**: guarda
+> não lê documentação do backend (bloqueava a reemissão de prod) · antes (27/10/2026 17:55): épico **`totem-instalador`
+> concluído** ([`PRD/DONE/totem-instalador/`](PRD/DONE/totem-instalador/)): `TotemSetup` com WebView2 em `dev-latest`;
+> o de campo passa a trazê-lo na próxima promoção `dev` → `prod` · antes (27/10/2026 16:40): **WebView2 do totem
+> obrigatório no CI** e payloads declarados no manifesto (PRD-TOTEMINST-02, armadilhas **f** e **t**) · antes
+> (27/10/2026 15:55): guardas `.iss` × C# do
+> **totem** (PRD-TOTEMINST-01, `tests/…/Totem/`) e totem na política de upgrade comum · antes (27/10/2026 08:45):
+> runner Windows registrado e
 > CI/CD ligado (PRD-RUNWIN-01): armadilhas **(r)** pwsh via MSI e **(s)** pacote sem artifact, release móvel
 > `prod-latest` · antes (24/10/2026 13:50): armadilha **(q)**:
 > `startup_failure` por permissão do `GITHUB_TOKEN` · antes (24/10/2026 12:07): instalador do
@@ -19,7 +27,7 @@ pipeline que os gera e publica. Comunicação, docs, commits e PRDs em **portugu
 |---|---|---|---|
 | `TefAgentSetup-X.Y.Z.exe` | `Tef.Agent` + `Tef.Agent.Setup` + `Tef.Agent.Tray` | [`installer/tefagent/build-installer.ps1`](installer/tefagent/build-installer.ps1) | dev, prod |
 | `PrintMonitorSetup-X.Y.Z.exe` | `PrintMonitor.{Service,Setup,Helper,Bootstrapper,Tray}` | [`installer/printmonitor/build-installer.ps1`](installer/printmonitor/build-installer.ps1) | dev, prod |
-| `TotemSetup-X.Y.Z.exe` | `Totem.Agent` + `Totem.Setup` + `Totem.Shell` (publish no próprio script; WebView2 opcional, fora do CI) | [`installer/totem/build-installer.ps1`](installer/totem/build-installer.ps1) | dev, prod |
+| `TotemSetup-X.Y.Z.exe` | `Totem.Agent` + `Totem.Setup` + `Totem.Shell` (publish no próprio script; bootstrapper do WebView2 do cache do runner, opcional só no build local; guardas em `tests/…/Totem/`) | [`installer/totem/build-installer.ps1`](installer/totem/build-installer.ps1) | dev, prod |
 
 A matriz é **[`installer/instaladores-ci.json`](installer/instaladores-ci.json)** — nunca o YAML.
 
@@ -40,6 +48,12 @@ workflows. Consequências:
   Helper, URL do dashboard) é **um PR em cada repositório**: backend primeiro, depois o `.iss` aqui. As
   guardas de `tests/` pegam a divergência — mas só quando rodam contra o backend novo (CI de PR usa a
   `dev` do backend; o `testar` do empacotamento usa o SHA exato).
+- O projeto de testes referencia do backend `PrintMonitor.{Core,Infrastructure,Helper,Setup}` e
+  `Totem.{Agent,Setup}` — **nunca** `Totem.Shell` nem outra casca WinForms (#104a do backend).
+- ⚠️ **Guarda não lê documentação do backend.** O `testar` da reemissão de prod roda as guardas contra a `prod`
+  do backend, que pode estar versões atrás da `dev` — doc atrasado lá reprovaria o pacote de campo por um texto
+  (aconteceu em 27/10/2026 com o `/CONTEUDOURL=`, armadilha **u**). Guarda confere **código** do backend; a
+  lista de parâmetros do `TotemSetup` vive no cabeçalho do `pages.iss`, e o runbook de lá a acompanha.
 - Os docs **do que o instalador faz na estação** ficaram no backend, ao lado do código que provisiona:
   [`TefAgentInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/TefAgentInstalador.md),
   [`PrintMonitorInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/PrintMonitorInstalador.md),
@@ -114,6 +128,7 @@ o job `empacotar` anexa cada `.exe` direto na release que o job `preparar` deixo
 | Runner | `[self-hosted, windows, instaladores]` em `C:\actions-runner`, **registrado neste repo** | `testar`, `empacotar`, diagnóstico |
 | Variável | `INSTALADORES_WINDOWS=true` (aqui **e** no backend) | liga-desliga: só depois do diagnóstico verde |
 | Variável | `PRINTMONITOR_PAYLOAD_DIR` / `PRINTMONITOR_DRIVERS_PAYLOAD_DIR` | caches do QZ Tray e do driver Bematech no runner |
+| Variável | `TOTEM_WEBVIEW2_PAYLOAD_DIR` | cache do bootstrapper do WebView2 do totem (`C:\ci-cache\totem-webview2`, [README](installer/totem/payload-webview2/README.md)) |
 | Segredo | `SISPEDRACAIDA_BACKEND_TOKEN` | `contents: read` no backend privado (checkout em `backend/`) |
 
 **Branches:** `dev` (integração, default) e `prod` (o que o backend dispara no canal de produção).
@@ -148,7 +163,7 @@ repositório (`m`–`p`).
 | c | `Filename too long` / `MSB3030 … apphost.exe … not found` | O worktree tem o backend inteiro sob `RUNNER_TEMP`; `core.longpaths` resolve o git, mas o **MSBuild segue em 260** — runner em `C:\actions-runner`; o diagnóstico mede o pior caso |
 | d | Run fica na fila 24 h e é cancelado | Sem runner registrado **neste** repo. Só ligue `INSTALADORES_WINDOWS` com o diagnóstico verde |
 | e | ISCC recusa a versão | Só `X.Y.Z` (`VersionInfoVersion`) |
-| f | PrintMonitor sai sem QZ Tray ou não compila | No CI os **dois** payloads são exigidos: sem QZ o pacote sairia incompleto; sem o driver o `.iss` faz `#error` |
+| f | PrintMonitor sai sem QZ Tray ou não compila; totem sai sem WebView2 | No CI **todo payload declarado no manifesto** (`payloads` da linha) é exigido: QZ Tray e driver Bematech do PrintMonitor, bootstrapper do WebView2 do totem. Sem QZ ou WebView2 o pacote sairia incompleto; sem o driver o `.iss` faz `#error`. O job `empacotar` e o diagnóstico só iteram a lista (PRD-TOTEMINST-02) |
 | g | Script morre no `git worktree add` só no 5.1 | Progresso do git no stderr vira exceção com `Stop`; `Invoke-GitEmpacotamento` roda com `Continue` e decide pelo código de saída |
 | h | Linha some da matriz em silêncio | `canais` vazio/errado. A guarda exige `canais` válido, sem repetição, `prod` em todas, e cobra a lista **fixa** `CanaisQueEmpacotam = ["dev","prod"]` — derivá-la do manifesto deixa a guarda cega (#74 do backend) |
 | i | `dev-latest`/`prod-latest` servindo duas versões | Tag móvel movida pela API **antes** do upload, assets anteriores apagados (`--clobber` só cobre nome igual). A tag aponta para o commit **deste** repo — tag não aponta para commit de outro repositório; o SHA do backend vai nas notas |
@@ -162,3 +177,5 @@ repositório (`m`–`p`).
 | q | `Instaladores Windows (dev)` termina em **`startup_failure`** ("workflow file issue") no push, mesmo com `INSTALADORES_WINDOWS` desligada | O `GITHUB_TOKEN` deste repositório nasce **só de leitura** (`default_workflow_permissions = read`), e o reusable `instaladores-windows.yml` pede `contents: write`. Chamador que não concede a permissão é recusado **no startup**, antes do `if`. Todo workflow que faz `uses: ./.github/workflows/instaladores-windows.yml` declara `permissions: contents: write`. Os disparos do backend (`workflow_dispatch`) não passam por aqui: o próprio reusable declara a permissão |
 | r | Job Windows morre com "pwsh não encontrado" (ou `winget install Microsoft.PowerShell --scope machine` dá `0x80070005` e o pwsh do usuário some) | O pwsh da Store é por usuário e não existe para `NETWORK SERVICE`; o manifesto de máquina do winget é `.msixbundle`, que falha e remove o da Store. PowerShell 7 vai pelo **MSI** da release oficial — é o que o [`preparar-runner-windows.ps1`](scripts/preparar-runner-windows.ps1) faz |
 | s | Pacotes gerados e o job reprova com `Artifact storage quota has been hit` | A cota de artifacts é **da conta**, somada entre os repositórios privados (o backend guarda ~35 MB de `coverage-report` por run). Os `.exe` (~350 MB por run) **não** passam por artifact: `gh release upload` do runner direto para a release; não reintroduzir `upload-artifact` para pacote |
+| t | Payload novo no manifesto e o job reprova "Payload ausente" com a variável criada; ou o diagnóstico fica verde sem conferir o cache novo | O contexto `vars` do Actions **não é enumerável**: o workflow só enxerga a variável que declara no `env:`. Toda `variavel` de `payloads` precisa de linha no `env:` do `instaladores-windows.yml` **e** do `runner-windows-diagnostico.yml` — guarda `TodaVariavelDePayload_EstaNosDoisWorkflows`. E crie o cache e a variável **antes** de mesclar na `dev`: o push dispara o empacotamento |
+| u | Guarda verde no PR para a `dev` e vermelha na promoção para a `prod` (ou no `testar` da reemissão), com o pacote certo | A guarda lia algo do backend que só existe na `dev` de lá (o runbook com `/CONTEUDOURL=`, PRD-TOTEMINST-01). O CI de PR para a `prod` e o `testar` de prod rodam contra a **`prod` do backend**. Guarda só lê **código** do backend que já esteja na versão empacotada; nunca documentação. Antes de promover, rode `dotnet test … -p:BackendDir=<worktree do backend na origin/prod>/` |
