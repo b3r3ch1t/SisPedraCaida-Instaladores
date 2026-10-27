@@ -1,6 +1,8 @@
 # Runner Windows dos instaladores — runbook
 
-> **Última atualização:** 23/10/2026 17:30 (horário local) — **mudou de repositório**: runner,
+> **Última atualização:** 27/10/2026 08:45 (horário local) — **runner registrado** (`instaladores-win-01`,
+> PRD-RUNWIN-01): §3 ganhou o `scripts/preparar-runner-windows.ps1` e a armadilha do pwsh via winget/MSIX;
+> pacotes publicados sem artifact (release móvel `prod-latest` para prod sem tag). Antes (23/10/2026 17:30): **mudou de repositório**: runner,
 > variáveis, segredos e workflows passaram para o **SisPedraCaida-Instaladores** (§4, §6). O backend só
 > dispara (§6.4). Antes (22/10/2026 16:35): §5 cobre os **dois** payloads do PrintMonitor.
 >
@@ -184,7 +186,7 @@ mas a assinatura tem carimbo de tempo).
    repositórios** (aqui liga o `instaladores-dev.yml`; no backend, os disparos de §6.4). A partir daí
    todo push na `prod` do backend empacota.
 3. Ensaio (etapa 05): **Actions → Instaladores Windows → Run workflow** (branch `prod`) com `sha` vazio
-   (HEAD da `prod` do backend) e `tag` vazia — gera os três instaladores só como artifact.
+   (HEAD da `prod` do backend) e `tag` vazia — gera os quatro instaladores na release móvel `prod-latest`.
 
 ### 6.1 Segredos (um token, dois repositórios)
 
@@ -270,7 +272,7 @@ registro** da §4 nem deve sair da página que o emite:
 4. §6.1 — rodar o diagnóstico até ficar **verde**.
 5. §6.1 — o token e os dois segredos.
 6. §6.2 — só então criar `INSTALADORES_WINDOWS=true` (nos dois repositórios).
-7. §6.3 — ensaio com `sha` e `tag` vazios (gera os três pacotes só como artifact).
+7. §6.3 — ensaio com `sha` e `tag` vazios (gera os pacotes na release móvel `prod-latest`).
 
 ### Reemitir para uma tag que já existe
 

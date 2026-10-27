@@ -190,6 +190,16 @@ else {
     Add-Resultado 'Git' 'FALHA' 'ausente. winget install --id Git.Git --scope machine'
 }
 
+# O job `empacotar` anexa o pacote à release com `gh release upload` direto do runner (sem artifact do
+# Actions, que esgota a cota da conta) — sem o gh no PATH da máquina o pacote sai e não é publicado.
+$gh = Get-PrimeiraLinha 'gh' @('--version')
+if ($gh) {
+    Add-Resultado 'GitHub CLI (gh)' 'OK' $gh
+}
+else {
+    Add-Resultado 'GitHub CLI (gh)' 'FALHA' 'ausente. winget install --id GitHub.cli --scope machine'
+}
+
 try {
     $iscc = Resolve-IsccExecutavel
     # O ISCC.exe não carrega versão no VersionInfo (sai 0.0.0.0): a única fonte é o cabeçalho que ele

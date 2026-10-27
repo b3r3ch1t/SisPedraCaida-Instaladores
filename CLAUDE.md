@@ -1,6 +1,8 @@
 # SisPedraCaida-Instaladores — Guia
 
-> **Última atualização deste CLAUDE.md:** 24/10/2026 13:50 (horário local, UTC-3) — armadilha **(q)**:
+> **Última atualização deste CLAUDE.md:** 27/10/2026 08:45 (horário local, UTC-3) — runner Windows registrado e
+> CI/CD ligado (PRD-RUNWIN-01): armadilhas **(r)** pwsh via MSI e **(s)** pacote sem artifact, release móvel
+> `prod-latest` · antes (24/10/2026 13:50): armadilha **(q)**:
 > `startup_failure` por permissão do `GITHUB_TOKEN` · antes (24/10/2026 12:07): instalador do
 > **totem** (`installer/totem/`) trazido junto: entrou no backend (PRD-TOTEM-04, PR #1226) depois do corte
 > desta migração · antes (23/10/2026 17:30): repositório criado com os instaladores Windows e o CI/CD que
@@ -103,8 +105,9 @@ Contrato completo dos scripts e diagnóstico por mensagem de erro:
 
 **Publicação (neste repositório):** `prod` → release `prod-vX.Y.Z` (mesma tag da release do backend,
 criada aqui com `--target` no commit dos scripts se não existir) com `.exe` + `.sha256` e a tabela de
-hashes entre marcadores nas notas; `prod` sem tag → só artifact (90 dias); `dev` → release móvel
-**`dev-latest`** (pré-lançamento) + artifact de 14 dias.
+hashes entre marcadores nas notas; `prod` sem tag → release móvel **`prod-latest`** (pré-lançamento);
+`dev` → release móvel **`dev-latest`** (pré-lançamento). **Sem artifact do Actions** desde 27/10/2026 (armadilha **s**):
+o job `empacotar` anexa cada `.exe` direto na release que o job `preparar` deixou pronta.
 
 **Configuração do repositório** (runbook: [`docs/RunnerWindowsInstaladores.md`](docs/RunnerWindowsInstaladores.md)):
 
@@ -150,9 +153,9 @@ repositório (`m`–`p`).
 | f | PrintMonitor sai sem QZ Tray ou não compila | No CI os **dois** payloads são exigidos: sem QZ o pacote sairia incompleto; sem o driver o `.iss` faz `#error` |
 | g | Script morre no `git worktree add` só no 5.1 | Progresso do git no stderr vira exceção com `Stop`; `Invoke-GitEmpacotamento` roda com `Continue` e decide pelo código de saída |
 | h | Linha some da matriz em silêncio | `canais` vazio/errado. A guarda exige `canais` válido, sem repetição, `prod` em todas, e cobra a lista **fixa** `CanaisQueEmpacotam = ["dev","prod"]` — derivá-la do manifesto deixa a guarda cega (#74 do backend) |
-| i | `dev-latest` servindo duas versões | Tag móvel movida pela API **antes** do upload, assets anteriores apagados (`--clobber` só cobre nome igual). A tag aponta para o commit **deste** repo — tag não aponta para commit de outro repositório; o SHA do backend vai nas notas |
+| i | `dev-latest`/`prod-latest` servindo duas versões | Tag móvel movida pela API **antes** do upload, assets anteriores apagados (`--clobber` só cobre nome igual). A tag aponta para o commit **deste** repo — tag não aponta para commit de outro repositório; o SHA do backend vai nas notas |
 | j | Ensaio da dev cancela o release da prod | `cancel-in-progress` só na dev, com o canal na chave do `concurrency.group` |
-| k | Vários `.exe` com o mesmo nome na dev | O nome repete entre SHAs; a procedência está no `sha7` do artifact, no `.sha256` e nas notas |
+| k | Vários `.exe` com o mesmo nome na dev | O nome repete entre SHAs; a procedência está nas notas da release (SHA do backend e dos scripts) e no `.sha256` |
 | l | Push recusado / clone pesado | PrintMonitor (~200 MB) passa de 100 MiB: versionar só `PrintMonitorSetup-X.Y.Z.zip.001…` (zip de até 90 MiB, `-DividirEmPartes`) + `.exe.sha256` com `git add -f`; remontar e conferir com `montar-instalador.ps1` antes; **uma versão só** (o mesmo commit faz `git rm` da anterior) |
 | m | Job `matriz` reprova "SISPEDRACAIDA_BACKEND_TOKEN ausente" / checkout do backend dá 404 | Os dois repos são privados e o `GITHUB_TOKEN` não cruza repositório: token fine-grained com `contents: read` no backend (runbook §6.1). 404 no checkout = token sem acesso ao backend |
 | n | O backend "disparou" e nada empacotou | `gh workflow run` é fire-and-forget: o run do backend fica verde e o resultado está **aqui**. Conferir: `INSTALADORES_WINDOWS` neste repo, `--ref` existente (`dev`/`prod`) e o workflow presente nessa branch |
@@ -160,3 +163,4 @@ repositório (`m`–`p`).
 | p | Pacote "igual" com hash diferente | O `.iss` não é pinado pelo `-Ref` (ele é deste checkout). Para reproduzir, `git checkout` do SHA de `Scripts` aqui. `Scripts … (com alteracoes locais)` = nunca distribuir |
 | q | `Instaladores Windows (dev)` termina em **`startup_failure`** ("workflow file issue") no push, mesmo com `INSTALADORES_WINDOWS` desligada | O `GITHUB_TOKEN` deste repositório nasce **só de leitura** (`default_workflow_permissions = read`), e o reusable `instaladores-windows.yml` pede `contents: write`. Chamador que não concede a permissão é recusado **no startup**, antes do `if`. Todo workflow que faz `uses: ./.github/workflows/instaladores-windows.yml` declara `permissions: contents: write`. Os disparos do backend (`workflow_dispatch`) não passam por aqui: o próprio reusable declara a permissão |
 | r | Job Windows morre com "pwsh não encontrado" (ou `winget install Microsoft.PowerShell --scope machine` dá `0x80070005` e o pwsh do usuário some) | O pwsh da Store é por usuário e não existe para `NETWORK SERVICE`; o manifesto de máquina do winget é `.msixbundle`, que falha e remove o da Store. PowerShell 7 vai pelo **MSI** da release oficial — é o que o [`preparar-runner-windows.ps1`](scripts/preparar-runner-windows.ps1) faz |
+| s | Pacotes gerados e o job reprova com `Artifact storage quota has been hit` | A cota de artifacts é **da conta**, somada entre os repositórios privados (o backend guarda ~35 MB de `coverage-report` por run). Os `.exe` (~350 MB por run) **não** passam por artifact: `gh release upload` do runner direto para a release; não reintroduzir `upload-artifact` para pacote |
