@@ -1,6 +1,6 @@
 # PRD-PMSEL-INST-01 — Instalador do PrintMonitor sem o driver da Bematech
 
-> **Status:** Em andamento — **Última atualização:** 29/10/2026 17:02
+> **Status:** Concluído — **Última atualização:** 29/10/2026 17:14
 
 ## Contexto
 
@@ -42,10 +42,10 @@ contrato com o C# ao perder o driver.
 
 ## Critérios de aceite
 
-- [ ] Pester (`Invoke-TestesEmpacotamento.ps1`) e guardas (`dotnet test tests/SisPedraCaida.Instaladores.Tests`) verdes.
-- [ ] `build-installer.ps1` gera o `PrintMonitorSetup-X.Y.Z.exe` sem `payload-drivers` nem `-DriversPayloadDir`.
-- [ ] Nenhuma referência a `BematechDriverFile`, `payload-drivers` ou `PRINTMONITOR_DRIVERS_PAYLOAD_DIR` fora de PRDs concluídos e do histórico.
-- [ ] PR para a `dev`.
+- [x] Pester (`Invoke-TestesEmpacotamento.ps1`) e guardas (`dotnet test tests/SisPedraCaida.Instaladores.Tests`) verdes.
+- [x] `build-installer.ps1` gera o `PrintMonitorSetup-X.Y.Z.exe` sem `payload-drivers` nem `-DriversPayloadDir`.
+- [x] Nenhuma referência a `BematechDriverFile`, `payload-drivers` ou `PRINTMONITOR_DRIVERS_PAYLOAD_DIR` fora de PRDs concluídos e do histórico.
+- [x] PR para a `dev`.
 
 ## Pós-merge (operador)
 
