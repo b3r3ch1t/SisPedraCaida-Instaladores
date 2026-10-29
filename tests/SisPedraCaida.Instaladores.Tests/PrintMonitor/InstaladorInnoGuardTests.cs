@@ -213,29 +213,31 @@ public class InstaladorInnoGuardTests
     }
 
     [Fact]
-    public void DriverBematech_EhObrigatorio_InstaladoPorExecENuncaDesinstalado()
+    public void DriverBematech_ForaDoPacote_ParametroAntigoAceitoENuncaDesinstalado()
     {
-        // PRD-PMTRAY-02: sem [Tasks], sem Check no [Files], #error sem o payload e o build exige o driver.
+        // PRD-PMSEL-INST-01: o técnico escolhe a impressora no --config-ui e instala o driver do modelo por fora.
+        // O pacote não embute nem instala driver nenhum, e o build não pede mais o payload.
         var principal = Ler("PrintMonitor.iss");
         var provisionamento = Ler("provisioning.iss");
+        var build = Ler("build-installer.ps1");
+
+        foreach (var (nome, texto) in new[] { ("PrintMonitor.iss", principal), ("provisioning.iss", provisionamento), ("build-installer.ps1", build) })
+        {
+            foreach (var resquicio in new[] { "BematechDriverFile", "payload-drivers", "InstalarDriverBematech", "ResumoDriverBematech", "DriversPayloadDir", "driver.sha256" })
+                Assert.False(texto.Contains(resquicio, StringComparison.Ordinal), $"{nome} ainda cita '{resquicio}'.");
+        }
 
         Assert.DoesNotMatch(@"(?m)^\[Tasks\]", principal);
-        Assert.DoesNotMatch(@"Name: ""driverbematech""", principal);
         Assert.DoesNotContain("WizardIsTaskSelected", provisionamento, StringComparison.Ordinal);
-        Assert.DoesNotContain("DriverBematechSelecionado", provisionamento, StringComparison.Ordinal);
-        Assert.Matches(@"#if BematechDriverFile == """"\s*\r?\n(\s*;[^\r\n]*\r?\n)*\s*#error", principal);
-        Assert.Matches(@"(?m)^Source: ""payload-drivers\\\{#BematechDriverFile\}""; DestDir: ""\{tmp\}""; Flags: deleteafterinstall\s*$", principal);
-        Assert.Contains("-Descricao 'o driver da Bematech MP-4200 TH' -Obrigatorio", Ler("build-installer.ps1"), StringComparison.Ordinal);
-        Assert.Contains("'/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-", provisionamento, StringComparison.Ordinal);
 
-        // Política de falha: o driver roda depois do provisionamento e a falha dele não reprova o agente.
-        var instalarDriver = Regex.Match(provisionamento, @"procedure InstalarDriverBematech\(\);[\s\S]*?\nend;").Value;
-        Assert.DoesNotContain("RaiseException", instalarDriver, StringComparison.Ordinal);
-        Assert.DoesNotContain("DesprovisionarAposFalha", instalarDriver, StringComparison.Ordinal);
+        // /DRIVERBEMATECH=1 de scripts de rollout antigos segue ACEITO e ignorado: documentado no cabeçalho, e
+        // nenhum código o lê (o Inno não reclama de parâmetro desconhecido).
+        var cabecalho = principal[..principal.IndexOf("#ifndef AppVersion", StringComparison.Ordinal)];
+        Assert.Matches(@";\s+/DRIVERBEMATECH=1\s", cabecalho);
+        Assert.Contains("DESCONTINUADOS (aceitos e ignorados", cabecalho, StringComparison.Ordinal);
+        Assert.DoesNotContain("param:DRIVERBEMATECH", principal + provisionamento + Ler("pages.iss"), StringComparison.OrdinalIgnoreCase);
 
-        // [Run] ignora o código de saída (#101a); e o desinstalador do PrintMonitor não remove o driver.
-        var secaoRun = Regex.Match(principal, @"^\[Run\][\s\S]*?(?=^\[)", RegexOptions.Multiline);
-        Assert.False(secaoRun.Success && secaoRun.Value.Contains("Bematech", StringComparison.OrdinalIgnoreCase));
+        // Upgrade não remove o driver que pacotes anteriores instalaram (desinstalador próprio; serve à impressora).
         var desinstalacao = Regex.Match(principal, @"^\[UninstallRun\][\s\S]*?(?=^\[)", RegexOptions.Multiline).Value;
         var entradas = desinstalacao.Split('\n').Where(l => !l.TrimStart().StartsWith(';'));
         Assert.DoesNotContain(entradas, l => l.Contains("Bematech", StringComparison.OrdinalIgnoreCase)

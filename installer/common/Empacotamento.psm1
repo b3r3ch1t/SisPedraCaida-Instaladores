@@ -412,7 +412,7 @@ function Test-ArquivoSha256 {
     a integridade passa a ser do BUILD: o hash declarado precisa bater com o binário e nomear o mesmo
     arquivo, senão o build falha. Sem pasta ou sem `.exe`, devolve vazio com aviso — o instalador sai
     sem aquele componente (cenário legítimo) — ou, com `-Obrigatorio`, LANÇA: componente obrigatório
-    ausente é pacote incompleto (o driver da Bematech desde PRD-PMTRAY-02). Mais de um `.exe` é ambíguo e
+    ausente é pacote incompleto (o bootstrapper do WebView2 do totem). Mais de um `.exe` é ambíguo e
     lança sempre.
 .PARAMETER PayloadDir
     Pasta de onde o binário é lido.
@@ -507,7 +507,7 @@ Sem esse arquivo o build aceitaria qualquer binário largado no payload.
 .PARAMETER PayloadDir
     Pasta do payload. Vazia ou inexistente é tratada como ausente.
 .PARAMETER ArquivoHash
-    Nome do arquivo de hash esperado (`payload.sha256`, `driver.sha256`).
+    Nome do arquivo de hash esperado (`payload.sha256`, `webview2.sha256`).
 .PARAMETER Descricao
     Como o componente é chamado nas mensagens (ex.: `o QZ Tray`).
 .PARAMETER Variavel
@@ -516,9 +516,9 @@ Sem esse arquivo o build aceitaria qualquer binário largado no payload.
     `AVISO` ou `FALHA` — o que vale quando a pasta/binário não existe. O CI exige (`FALHA`); na máquina
     do dev que só vai empacotar o TEF, ausente é `AVISO`.
 .PARAMETER EfeitoSeAusente
-    O que acontece com o build sem este payload. O QZ sai do pacote; o driver **reprova o build**
-    (`-Obrigatorio`, PRD-PMTRAY-02) — a diferença precisa aparecer na tela, senão os dois parecem
-    igualmente dispensáveis.
+    O que acontece com o build sem este payload. O QZ sai do pacote; o WebView2 deixa a tela do totem
+    "fora de serviço" — a diferença precisa aparecer na tela, senão os dois parecem igualmente
+    dispensáveis.
 .OUTPUTS
     `[pscustomobject]` com `Estado` (OK/AVISO/FALHA) e `Detalhe`.
 #>
@@ -602,7 +602,7 @@ function ConvertTo-ListaDeOrigens {
     Divide um arquivo em partes numeradas `<arquivo>.001`, `.002`… de no máximo `TamanhoParte` bytes.
 .DESCRIPTION
     O GitHub recusa no push qualquer arquivo acima de 100 MiB, e o instalador do PrintMonitor (QZ Tray
-    com JRE + driver Bematech embutidos) passa disso. Versionar em partes evita a cota do Git LFS;
+    com JRE embutido) passa disso. Versionar em partes evita a cota do Git LFS;
     remontar é concatenar na ordem (`Join-PartesDoArquivo`, ou `copy /b` no cmd).
 
     Partes de uma divisão anterior do mesmo arquivo são apagadas antes: uma `.003` que sobrasse de um

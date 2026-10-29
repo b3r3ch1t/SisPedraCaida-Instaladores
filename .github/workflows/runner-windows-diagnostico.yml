@@ -3,8 +3,8 @@ name: Runner Windows - diagnóstico (instaladores)
 # Confere se o runner [self-hosted, windows, instaladores] está pronto para empacotar os instaladores
 # do CI de prod (PRD-INSTPROD-01): SDK do global.json, pwsh, git, Inno Setup 6 com pt-BR,
 # LongPathsEnabled, comprimento do caminho dos worktrees e todo payload declarado no manifesto
-# (installer/instaladores-ci.json: QZ Tray e driver Bematech do PrintMonitor, bootstrapper do WebView2 do
-# totem), cada um com o hash conferido.
+# (installer/instaladores-ci.json: QZ Tray do PrintMonitor, bootstrapper do WebView2 do totem), cada um
+# com o hash conferido.
 #
 # Rode DEPOIS de registrar o runner e ANTES de ligar a variável INSTALADORES_WINDOWS — e de novo a
 # cada troca de SDK, Inno ou versão de um dos payloads. O script roda como a conta do serviço do runner, que é
@@ -23,9 +23,6 @@ jobs:
     timeout-minutes: 10
     env:
       PRINTMONITOR_PAYLOAD_DIR: ${{ vars.PRINTMONITOR_PAYLOAD_DIR }}
-      # O driver da Bematech é OBRIGATÓRIO desde o PRD-PMTRAY-02 (sem ele o build do PrintMonitor
-      # falha, não só sai sem o componente) — conferido aqui desde o PRD-INSTDEV-04.
-      PRINTMONITOR_DRIVERS_PAYLOAD_DIR: ${{ vars.PRINTMONITOR_DRIVERS_PAYLOAD_DIR }}
       # Bootstrapper do WebView2 Runtime do totem (PRD-TOTEMINST-02). Toda variável de payload do manifesto
       # precisa de uma linha aqui (guarda TodaVariavelDePayload_EstaNosDoisWorkflows).
       TOTEM_WEBVIEW2_PAYLOAD_DIR: ${{ vars.TOTEM_WEBVIEW2_PAYLOAD_DIR }}
