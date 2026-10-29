@@ -1,6 +1,9 @@
 # SisPedraCaida-Instaladores — Guia
 
-> **Última atualização deste CLAUDE.md:** 27/10/2026 15:54 (horário local, UTC-3) — o `TotemSetup` **de campo já traz o
+> **Última atualização deste CLAUDE.md:** 29/10/2026 17:30 (horário local, UTC-3) — o `PrintMonitorSetup` **não traz
+> mais o driver da Bematech** (PRD-PMSEL-INST-01, épico `printmonitor-selecao-impressora`): sai o payload, o
+> `-DriversPayloadDir` e a variável `PRINTMONITOR_DRIVERS_PAYLOAD_DIR`; `/DRIVERBEMATECH=1` segue aceito e ignorado
+> · antes (27/10/2026 15:54): o `TotemSetup` **de campo já traz o
 > WebView2**: a promoção `dev` → `prod` aconteceu (`42c251a`) e `prod-v4.1.2` tem o `TotemSetup-4.1.2.exe` com o
 > bootstrapper; ⚠️ `prod-latest` ainda serve o `TotemSetup-3.19.5.exe` antigo — campo baixa sempre de `prod-vX.Y.Z`
 > · antes (27/10/2026 13:13): instalador do **agente da balança
@@ -85,7 +88,7 @@ PRD/                            # TODO → DOING → DONE
 ```powershell
 # Pacote (backend clonado ao lado, em ../SisPedraCaida-Backend)
 pwsh installer/tefagent/build-installer.ps1 -Ref origin/dev
-pwsh installer/printmonitor/build-installer.ps1 -Ref origin/dev -PayloadDir <qz> -DriversPayloadDir <driver>
+pwsh installer/printmonitor/build-installer.ps1 -Ref origin/dev -PayloadDir <qz>
 pwsh installer/tefagent/build-installer.ps1 -UseWorkingTree -SkipPublish -DryRun   # iterar no .iss
 
 # Testes
@@ -130,7 +133,7 @@ o job `empacotar` anexa cada `.exe` direto na release que o job `preparar` deixo
 |---|---|---|
 | Runner | `[self-hosted, windows, instaladores]` em `C:\actions-runner`, **registrado neste repo** | `testar`, `empacotar`, diagnóstico |
 | Variável | `INSTALADORES_WINDOWS=true` (aqui **e** no backend) | liga-desliga: só depois do diagnóstico verde |
-| Variável | `PRINTMONITOR_PAYLOAD_DIR` / `PRINTMONITOR_DRIVERS_PAYLOAD_DIR` | caches do QZ Tray e do driver Bematech no runner |
+| Variável | `PRINTMONITOR_PAYLOAD_DIR` | cache do QZ Tray no runner. `PRINTMONITOR_DRIVERS_PAYLOAD_DIR` (driver Bematech) saiu no PRD-PMSEL-INST-01: apagar a variável e `C:\ci-cache\printmonitor-drivers` só **depois** da promoção `dev` → `prod` daqui |
 | Variável | `TOTEM_WEBVIEW2_PAYLOAD_DIR` | cache do bootstrapper do WebView2 do totem (`C:\ci-cache\totem-webview2`, [README](installer/totem/payload-webview2/README.md)) |
 | Segredo | `SISPEDRACAIDA_BACKEND_TOKEN` | `contents: read` no backend privado (checkout em `backend/`) |
 
@@ -166,7 +169,7 @@ repositório (`m`–`p`).
 | c | `Filename too long` / `MSB3030 … apphost.exe … not found` | O worktree tem o backend inteiro sob `RUNNER_TEMP`; `core.longpaths` resolve o git, mas o **MSBuild segue em 260** — runner em `C:\actions-runner`; o diagnóstico mede o pior caso |
 | d | Run fica na fila 24 h e é cancelado | Sem runner registrado **neste** repo. Só ligue `INSTALADORES_WINDOWS` com o diagnóstico verde |
 | e | ISCC recusa a versão | Só `X.Y.Z` (`VersionInfoVersion`) |
-| f | PrintMonitor sai sem QZ Tray ou não compila; totem sai sem WebView2 | No CI **todo payload declarado no manifesto** (`payloads` da linha) é exigido: QZ Tray e driver Bematech do PrintMonitor, bootstrapper do WebView2 do totem. Sem QZ ou WebView2 o pacote sairia incompleto; sem o driver o `.iss` faz `#error`. O job `empacotar` e o diagnóstico só iteram a lista (PRD-TOTEMINST-02) |
+| f | PrintMonitor sai sem QZ Tray; totem sai sem WebView2 | No CI **todo payload declarado no manifesto** (`payloads` da linha) é exigido: QZ Tray do PrintMonitor, bootstrapper do WebView2 do totem — sem eles o pacote sairia incompleto. O job `empacotar` e o diagnóstico só iteram a lista (PRD-TOTEMINST-02). O driver Bematech **não** é payload desde o PRD-PMSEL-INST-01: o técnico instala o driver do modelo por fora |
 | g | Script morre no `git worktree add` só no 5.1 | Progresso do git no stderr vira exceção com `Stop`; `Invoke-GitEmpacotamento` roda com `Continue` e decide pelo código de saída |
 | h | Linha some da matriz em silêncio | `canais` vazio/errado. A guarda exige `canais` válido, sem repetição, `prod` em todas, e cobra a lista **fixa** `CanaisQueEmpacotam = ["dev","prod"]` — derivá-la do manifesto deixa a guarda cega (#74 do backend) |
 | i | `dev-latest`/`prod-latest` servindo duas versões | Tag móvel movida pela API **antes** do upload, assets anteriores apagados (`--clobber` só cobre nome igual). A tag aponta para o commit **deste** repo — tag não aponta para commit de outro repositório; o SHA do backend vai nas notas |

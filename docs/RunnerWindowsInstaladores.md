@@ -110,7 +110,6 @@ com "Payload ausente" em vez de gerar pacote de campo incompleto.
 | Payload | Instalador | Pasta / hash | Variável no CI | Sem ele, no build local |
 |---|---|---|---|---|
 | **QZ Tray** | PrintMonitor | [`installer/printmonitor/payload/`](../installer/printmonitor/payload/README.md) · `payload.sha256` | `PRINTMONITOR_PAYLOAD_DIR` | o instalador **sai sem** o componente |
-| **Driver Bematech MP-4200 TH** | PrintMonitor | [`installer/printmonitor/payload-drivers/`](../installer/printmonitor/payload-drivers/README.md) · `driver.sha256` | `PRINTMONITOR_DRIVERS_PAYLOAD_DIR` | o **build falha** (`Resolve-PayloadVerificado -Obrigatorio` + `#error` no `.iss`, desde o PRD-PMTRAY-02) |
 | **Bootstrapper do WebView2 Runtime** | totem | [`installer/totem/payload-webview2/`](../installer/totem/payload-webview2/README.md) · `webview2.sha256` | `TOTEM_WEBVIEW2_PAYLOAD_DIR` | o instalador **sai sem** o runtime: em Windows sem ele a tela do totem fica "fora de serviço" |
 
 **A lista é o manifesto**, não este runbook nem o YAML: cada linha de `installer/instaladores-ci.json` tem
@@ -143,25 +142,15 @@ Depois, no GitHub: **Settings → Secrets and variables → Actions → Variable
 na pasta só prova que ele não mudou desde então, não que é o QZ Tray verdadeiro. No CI o payload é
 **obrigatório** — sem ele o job do PrintMonitor reprova em vez de gerar pacote de campo sem o QZ.
 
-### 5.2 Cache do driver Bematech
+### 5.2 Driver Bematech (removido)
 
-Mesma receita, outra pasta e outro nome de hash:
+O `PrintMonitorSetup` **não traz mais** o driver da Bematech MP-4200 TH (PRD-PMSEL-INST-01): o técnico
+escolhe a impressora no `Setup.exe --config-ui` e instala o driver do modelo por fora. Não monte o cache
+`C:\ci-cache\printmonitor-drivers` num runner novo.
 
-```powershell
-New-Item -ItemType Directory C:\ci-cache\printmonitor-drivers -Force
-# copie para lá SÓ o instalador do driver homologado (ver o README da pasta: nome, tamanho, SHA-256 e
-# assinatura Authenticode esperados) e crie o hash:
-cd C:\ci-cache\printmonitor-drivers
-"$((Get-FileHash .\bematech-mp4200th-spooler-x64-5.0.0.4.exe -Algorithm SHA256).Hash.ToLower())  bematech-mp4200th-spooler-x64-5.0.0.4.exe" |
-  Set-Content driver.sha256 -Encoding ascii
-icacls C:\ci-cache\printmonitor-drivers /grant "NT AUTHORITY\NETWORK SERVICE:(OI)(CI)RX"
-```
-
-E a variável **`PRINTMONITOR_DRIVERS_PAYLOAD_DIR`** = `C:\ci-cache\printmonitor-drivers`.
-
-⚠️ O `README.md` da pasta publica o SHA-256 esperado do binário homologado — confira-o, e a
-assinatura, com `Get-AuthenticodeSignature` antes de trocar o arquivo (o certificado expirou em 2019,
-mas a assinatura tem carimbo de tempo).
+⚠️ No runner existente, apague o cache e a variável `PRINTMONITOR_DRIVERS_PAYLOAD_DIR` só **depois** da
+promoção `dev` → `prod` deste repositório: até lá a `prod` daqui ainda exige o driver, e a reemissão de
+um pacote de campo reprovaria sem ele.
 
 ### 5.3 Cache do bootstrapper do WebView2 (totem)
 
@@ -206,7 +195,6 @@ reprova. Os outros serviços seguem empacotando (`fail-fast: false`).
    | Pester | ausente (o Windows traz o 3.4; os testes do `Empacotamento.psm1` rodam antes de empacotar) |
    | Caminho dos worktrees | o pior caminho do MSBuild sob `RUNNER_TEMP` passa de 259 caracteres |
    | Payload (printmonitor): o QZ Tray | variável/pasta ausente, ≠ 1 `.exe`, sem `payload.sha256` ou hash divergente |
-   | Payload (printmonitor): o driver da Bematech | idem, com `driver.sha256` (PRD-INSTDEV-04) |
    | Payload (totem): o bootstrapper do WebView2 | idem, com `webview2.sha256` (PRD-TOTEMINST-02) |
 
    As linhas de payload saem do manifesto: uma por item de `payloads`, na ordem das linhas.
@@ -219,12 +207,11 @@ reprova. Os outros serviços seguem empacotando (`fail-fast: false`).
    ```powershell
    pwsh scripts/runner-windows-diagnostico.ps1 -BackendRoot ..\SisPedraCaida-Backend `
      -PayloadDir C:\ci-cache\printmonitor-payload `
-     -DriversPayloadDir C:\ci-cache\printmonitor-drivers `
      -WebView2PayloadDir C:\ci-cache\totem-webview2
    ```
 
-   Os três parâmetros de pasta são só overrides: sem eles, cada pasta vem da variável que o manifesto
-   declara (`PRINTMONITOR_PAYLOAD_DIR`, `PRINTMONITOR_DRIVERS_PAYLOAD_DIR`, `TOTEM_WEBVIEW2_PAYLOAD_DIR`).
+   Os dois parâmetros de pasta são só overrides: sem eles, cada pasta vem da variável que o manifesto
+   declara (`PRINTMONITOR_PAYLOAD_DIR`, `TOTEM_WEBVIEW2_PAYLOAD_DIR`).
 
 2. Com o diagnóstico verde, crie a variável **`INSTALADORES_WINDOWS`** = `true` **nos dois
    repositórios** (aqui liga o `instaladores-dev.yml`; no backend, os disparos de §6.4). A partir daí
@@ -272,7 +259,6 @@ falha de instalador nunca encostou no deploy das imagens.
 | Runner **offline** com `INSTALADORES_WINDOWS=true` | o job fica **na fila** (não falha) e é cancelado após 24 h; o deploy das imagens não é afetado (D3). Religue o serviço `actions.runner.*` ou desligue a variável |
 | Release saiu sem algum instalador | o run **deste repositório** fica vermelho no job que falhou; corrija e **reemita**: `Instaladores Windows` (branch `prod`) com `sha` = commit do release no backend e `tag` = `prod-vX.Y.Z` (os anexos são substituídos) |
 | Nova versão do QZ Tray | troque o `.exe` e o `payload.sha256` em `C:\ci-cache\printmonitor-payload` e rode o diagnóstico |
-| Nova versão do driver Bematech | troque o `.exe` e o `driver.sha256` em `C:\ci-cache\printmonitor-drivers`, atualize o `README.md` da pasta (hash e assinatura) e rode o diagnóstico |
 | Novo bootstrapper do WebView2 | baixe de novo pela §5.3, confira a assinatura, troque o `.exe` e o `webview2.sha256` em `C:\ci-cache\totem-webview2` e rode o diagnóstico |
 | Novo SDK / Inno | atualize com `winget upgrade … --scope machine` e rode o diagnóstico |
 | Disco enchendo | `RUNNER_TEMP` é limpo pelo runner a cada job; os worktrees são removidos pelo próprio script. Para run cancelado no meio, uma tarefa agendada semanal com `git -C C:\actions-runner\_work\SisPedraCaida-Instaladores\SisPedraCaida-Instaladores\backend worktree prune` |
@@ -313,7 +299,7 @@ registro** da §4 nem deve sair da página que o emite:
 
 1. §3 — preparar a máquina, tudo `--scope machine`.
 2. §4 — registrar o runner em `C:\actions-runner`, como serviço, com o label `instaladores`.
-3. §5 — os **dois** caches do PrintMonitor + as variáveis `PRINTMONITOR_PAYLOAD_DIR` e `PRINTMONITOR_DRIVERS_PAYLOAD_DIR`.
+3. §5 — o cache do QZ Tray + a variável `PRINTMONITOR_PAYLOAD_DIR` (o do driver Bematech saiu no PRD-PMSEL-INST-01).
 4. §6.1 — rodar o diagnóstico até ficar **verde**.
 5. §6.1 — o token e os dois segredos.
 6. §6.2 — só então criar `INSTALADORES_WINDOWS=true` (nos dois repositórios).
