@@ -21,13 +21,6 @@
           "hash": "payload.sha256",
           "descricao": "o QZ Tray",
           "seAusente": "O pacote do PrintMonitor sairia sem o QZ Tray."
-        },
-        {
-          "parametro": "DriversPayloadDir",
-          "variavel": "PRINTMONITOR_DRIVERS_PAYLOAD_DIR",
-          "hash": "driver.sha256",
-          "descricao": "o driver da Bematech MP-4200 TH",
-          "seAusente": "O build do PrintMonitor FALHA sem ele (obrigatorio desde PRD-PMTRAY-02)."
         }
       ],
       "canais": ["dev", "prod"]

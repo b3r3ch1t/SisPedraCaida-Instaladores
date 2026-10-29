@@ -25,16 +25,11 @@
 .PARAMETER PayloadDir
     Cache do instalador do QZ Tray. Padrão: `$env:PRINTMONITOR_PAYLOAD_DIR`.
 
-.PARAMETER DriversPayloadDir
-    Cache do instalador do driver da Bematech MP-4200 TH. Padrão:
-    `$env:PRINTMONITOR_DRIVERS_PAYLOAD_DIR`. Componente **obrigatório** desde o PRD-PMTRAY-02: sem ele
-    o build do PrintMonitor falha, diferente do QZ Tray, que só sai do pacote.
-
 .PARAMETER WebView2PayloadDir
     Cache do bootstrapper do WebView2 Runtime do totem (`MicrosoftEdgeWebview2Setup.exe` +
     `webview2.sha256`). Padrão: `$env:TOTEM_WEBVIEW2_PAYLOAD_DIR` (PRD-TOTEMINST-02).
 
-    Os três parâmetros de pasta são só overrides: a LISTA de payloads conferidos vem do manifesto
+    Os dois parâmetros de pasta são só overrides: a LISTA de payloads conferidos vem do manifesto
     (`installer/instaladores-ci.json`, campo `payloads`), e cada um é lido da variável declarada lá.
 
 .PARAMETER BackendRoot
@@ -56,7 +51,6 @@
 param(
     [string] $BaseDir = '',
     [string] $PayloadDir = '',
-    [string] $DriversPayloadDir = '',
     [string] $WebView2PayloadDir = '',
     [switch] $ExigirPayload,
     [string] $BackendRoot = ''
@@ -78,9 +72,8 @@ if (-not $BaseDir) {
 # Overrides de linha de comando, pela variável que o manifesto declara para cada cache. Sem override, a
 # pasta vem da própria variável de ambiente (no Actions, do `env:` do workflow).
 $overridesDePayload = @{
-    'PRINTMONITOR_PAYLOAD_DIR'         = $PayloadDir
-    'PRINTMONITOR_DRIVERS_PAYLOAD_DIR' = $DriversPayloadDir
-    'TOTEM_WEBVIEW2_PAYLOAD_DIR'       = $WebView2PayloadDir
+    'PRINTMONITOR_PAYLOAD_DIR'   = $PayloadDir
+    'TOTEM_WEBVIEW2_PAYLOAD_DIR' = $WebView2PayloadDir
 }
 
 # Limite do MSBuild/Win32 sem prefixo \\?\: 260 com o terminador, ou seja, 259 caracteres úteis.

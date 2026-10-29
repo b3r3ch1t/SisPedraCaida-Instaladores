@@ -357,30 +357,30 @@ Describe 'Empacotamento.psm1' {
                 if ($Hash -ne '-') {
                     if (-not $Hash) { $Hash = $calculado }
                     if (-not $NomeNoHash) { $NomeNoHash = $Nome }
-                    Set-Content -Path (Join-Path $pasta 'driver.sha256') -Value "$Hash  $NomeNoHash" -Encoding ascii
+                    Set-Content -Path (Join-Path $pasta 'webview2.sha256') -Value "$Hash  $NomeNoHash" -Encoding ascii
                 }
                 return [pscustomobject]@{ Pasta = $pasta; Exe = $exe; Hash = $calculado }
             }
         }
 
         It 'confere o hash, copia para o destino e devolve o nome' {
-            $p = Novo-Payload -Nome 'driver-1.0.exe'
+            $p = Novo-Payload -Nome 'webview2-1.0.exe'
             $destino = Join-Path $TestDrive 'fonte-ok'
-            $nome = Resolve-PayloadVerificado -PayloadDir $p.Pasta -ArquivoHash 'driver.sha256' -Destino $destino -Descricao 'o driver'
+            $nome = Resolve-PayloadVerificado -PayloadDir $p.Pasta -ArquivoHash 'webview2.sha256' -Destino $destino -Descricao 'o WebView2'
 
-            Confirmar ($nome -eq 'driver-1.0.exe') "nome devolvido '$nome'"
-            Confirmar (Test-Path (Join-Path $destino 'driver-1.0.exe')) 'binário não copiado para o destino'
+            Confirmar ($nome -eq 'webview2-1.0.exe') "nome devolvido '$nome'"
+            Confirmar (Test-Path (Join-Path $destino 'webview2-1.0.exe')) 'binário não copiado para o destino'
         }
 
         It 'sem pasta devolve vazio (instalador sai sem o componente)' {
-            $nome = Resolve-PayloadVerificado -PayloadDir (Join-Path $TestDrive 'nao-existe') -ArquivoHash 'driver.sha256' `
-                -Destino (Join-Path $TestDrive 'fonte-vazia') -Descricao 'o driver'
+            $nome = Resolve-PayloadVerificado -PayloadDir (Join-Path $TestDrive 'nao-existe') -ArquivoHash 'webview2.sha256' `
+                -Destino (Join-Path $TestDrive 'fonte-vazia') -Descricao 'o WebView2'
             Confirmar ($nome -eq '') "esperava vazio, veio '$nome'"
         }
 
-        It '-Obrigatorio sem pasta lança (componente obrigatório não sai do pacote — PRD-PMTRAY-02)' {
+        It '-Obrigatorio sem pasta lança (componente obrigatório não sai do pacote — PRD-TOTEMINST-02)' {
             Confirmar-Lanca { Resolve-PayloadVerificado -PayloadDir (Join-Path $TestDrive 'nao-existe-obrig') `
-                -ArquivoHash 'driver.sha256' -Destino (Join-Path $TestDrive 'fonte-obrig') -Descricao 'o driver' `
+                -ArquivoHash 'webview2.sha256' -Destino (Join-Path $TestDrive 'fonte-obrig') -Descricao 'o WebView2' `
                 -Obrigatorio } 'ausente'
         }
 
@@ -388,40 +388,40 @@ Describe 'Empacotamento.psm1' {
             $pasta = Join-Path $TestDrive 'obrig-sem-exe'
             New-Item -ItemType Directory -Path $pasta -Force | Out-Null
             Set-Content -Path (Join-Path $pasta 'README.md') -Value 'sem binário' -Encoding ascii
-            Confirmar-Lanca { Resolve-PayloadVerificado -PayloadDir $pasta -ArquivoHash 'driver.sha256' `
-                -Destino (Join-Path $TestDrive 'fonte-obrig2') -Descricao 'o driver' -Obrigatorio } 'Nenhum .exe'
+            Confirmar-Lanca { Resolve-PayloadVerificado -PayloadDir $pasta -ArquivoHash 'webview2.sha256' `
+                -Destino (Join-Path $TestDrive 'fonte-obrig2') -Descricao 'o WebView2' -Obrigatorio } 'Nenhum .exe'
         }
 
         It '-Obrigatorio com payload íntegro devolve o nome, como sem a chave' {
-            $p = Novo-Payload -Nome 'driver-2.0.exe'
-            $nome = Resolve-PayloadVerificado -PayloadDir $p.Pasta -ArquivoHash 'driver.sha256' `
-                -Destino (Join-Path $TestDrive 'fonte-obrig-ok') -Descricao 'o driver' -Obrigatorio
-            Confirmar ($nome -eq 'driver-2.0.exe') "nome devolvido '$nome'"
+            $p = Novo-Payload -Nome 'webview2-2.0.exe'
+            $nome = Resolve-PayloadVerificado -PayloadDir $p.Pasta -ArquivoHash 'webview2.sha256' `
+                -Destino (Join-Path $TestDrive 'fonte-obrig-ok') -Descricao 'o WebView2' -Obrigatorio
+            Confirmar ($nome -eq 'webview2-2.0.exe') "nome devolvido '$nome'"
         }
 
         It 'reprova hash divergente' {
-            $p = Novo-Payload -Nome 'driver-1.0.exe' -Hash ('0' * 64)
-            Confirmar-Lanca { Resolve-PayloadVerificado -PayloadDir $p.Pasta -ArquivoHash 'driver.sha256' `
-                -Destino (Join-Path $TestDrive 'fonte-div') -Descricao 'o driver' } 'divergente'
+            $p = Novo-Payload -Nome 'webview2-1.0.exe' -Hash ('0' * 64)
+            Confirmar-Lanca { Resolve-PayloadVerificado -PayloadDir $p.Pasta -ArquivoHash 'webview2.sha256' `
+                -Destino (Join-Path $TestDrive 'fonte-div') -Descricao 'o WebView2' } 'divergente'
         }
 
         It 'reprova arquivo de hash que nomeia outro binário' {
-            $p = Novo-Payload -Nome 'driver-1.0.exe' -NomeNoHash 'outro.exe'
-            Confirmar-Lanca { Resolve-PayloadVerificado -PayloadDir $p.Pasta -ArquivoHash 'driver.sha256' `
-                -Destino (Join-Path $TestDrive 'fonte-nome') -Descricao 'o driver' } 'outro.exe'
+            $p = Novo-Payload -Nome 'webview2-1.0.exe' -NomeNoHash 'outro.exe'
+            Confirmar-Lanca { Resolve-PayloadVerificado -PayloadDir $p.Pasta -ArquivoHash 'webview2.sha256' `
+                -Destino (Join-Path $TestDrive 'fonte-nome') -Descricao 'o WebView2' } 'outro.exe'
         }
 
         It 'reprova ausência do arquivo de hash, com a instrução do hash calculado' {
-            $p = Novo-Payload -Nome 'driver-1.0.exe' -Hash '-'
-            Confirmar-Lanca { Resolve-PayloadVerificado -PayloadDir $p.Pasta -ArquivoHash 'driver.sha256' `
-                -Destino (Join-Path $TestDrive 'fonte-semhash') -Descricao 'o driver' } $p.Hash
+            $p = Novo-Payload -Nome 'webview2-1.0.exe' -Hash '-'
+            Confirmar-Lanca { Resolve-PayloadVerificado -PayloadDir $p.Pasta -ArquivoHash 'webview2.sha256' `
+                -Destino (Join-Path $TestDrive 'fonte-semhash') -Descricao 'o WebView2' } $p.Hash
         }
 
         It 'reprova mais de um executável' {
-            $p = Novo-Payload -Nome 'driver-1.0.exe'
+            $p = Novo-Payload -Nome 'webview2-1.0.exe'
             [System.IO.File]::WriteAllBytes((Join-Path $p.Pasta 'outro.exe'), [byte[]](1..8))
-            Confirmar-Lanca { Resolve-PayloadVerificado -PayloadDir $p.Pasta -ArquivoHash 'driver.sha256' `
-                -Destino (Join-Path $TestDrive 'fonte-dois') -Descricao 'o driver' } 'apenas um'
+            Confirmar-Lanca { Resolve-PayloadVerificado -PayloadDir $p.Pasta -ArquivoHash 'webview2.sha256' `
+                -Destino (Join-Path $TestDrive 'fonte-dois') -Descricao 'o WebView2' } 'apenas um'
         }
     }
 
@@ -462,15 +462,15 @@ Describe 'Empacotamento.psm1' {
         }
 
         It 'pasta não informada respeita o EstadoSeAusente e cita a variável e o efeito' {
-            $aviso = Confirmar-NaoLanca { Test-PayloadDoRunner -PayloadDir '' -ArquivoHash 'driver.sha256' `
-                    -Descricao 'o driver' -Variavel 'PRINTMONITOR_DRIVERS_PAYLOAD_DIR' `
+            $aviso = Confirmar-NaoLanca { Test-PayloadDoRunner -PayloadDir '' -ArquivoHash 'webview2.sha256' `
+                    -Descricao 'o WebView2' -Variavel 'TOTEM_WEBVIEW2_PAYLOAD_DIR' `
                     -EstadoSeAusente 'AVISO' -EfeitoSeAusente 'O build FALHA sem ele.' }
-            $falha = Confirmar-NaoLanca { Test-PayloadDoRunner -PayloadDir '' -ArquivoHash 'driver.sha256' `
-                    -Descricao 'o driver' -Variavel 'PRINTMONITOR_DRIVERS_PAYLOAD_DIR' -EstadoSeAusente 'FALHA' }
+            $falha = Confirmar-NaoLanca { Test-PayloadDoRunner -PayloadDir '' -ArquivoHash 'webview2.sha256' `
+                    -Descricao 'o WebView2' -Variavel 'TOTEM_WEBVIEW2_PAYLOAD_DIR' -EstadoSeAusente 'FALHA' }
 
             Confirmar ($aviso.Estado -eq 'AVISO') "sem o switch esperava AVISO, veio '$($aviso.Estado)'"
             Confirmar ($falha.Estado -eq 'FALHA') "com o switch esperava FALHA, veio '$($falha.Estado)'"
-            Confirmar ($aviso.Detalhe -like '*PRINTMONITOR_DRIVERS_PAYLOAD_DIR*') "detalhe sem a variável: '$($aviso.Detalhe)'"
+            Confirmar ($aviso.Detalhe -like '*TOTEM_WEBVIEW2_PAYLOAD_DIR*') "detalhe sem a variável: '$($aviso.Detalhe)'"
             Confirmar ($aviso.Detalhe -like '*O build FALHA sem ele.*') "detalhe sem o efeito: '$($aviso.Detalhe)'"
         }
 
@@ -510,14 +510,14 @@ Describe 'Empacotamento.psm1' {
             Confirmar ($b.Detalhe -like '*divergente*') "detalhe do divergente: '$($b.Detalhe)'"
         }
 
-        It 'o arquivo de hash é o do componente: o do QZ não serve ao driver' {
-            # A pasta do driver tem o binário e um payload.sha256 (nome do QZ) — falta o driver.sha256.
-            $pasta = Novo-PayloadDeRunner -Nome 'bematech.exe' -ArquivoHash 'payload.sha256'
-            $r = Confirmar-NaoLanca { Test-PayloadDoRunner -PayloadDir $pasta -ArquivoHash 'driver.sha256' `
-                    -Descricao 'o driver' -Variavel 'VAR' }
+        It 'o arquivo de hash é o do componente: o do QZ não serve ao WebView2' {
+            # A pasta do WebView2 tem o binário e um payload.sha256 (nome do QZ) — falta o webview2.sha256.
+            $pasta = Novo-PayloadDeRunner -Nome 'MicrosoftEdgeWebview2Setup.exe' -ArquivoHash 'payload.sha256'
+            $r = Confirmar-NaoLanca { Test-PayloadDoRunner -PayloadDir $pasta -ArquivoHash 'webview2.sha256' `
+                    -Descricao 'o WebView2' -Variavel 'VAR' }
 
             Confirmar ($r.Estado -eq 'FALHA') "estado '$($r.Estado)'"
-            Confirmar ($r.Detalhe -like '*driver.sha256*') "detalhe sem o nome esperado: '$($r.Detalhe)'"
+            Confirmar ($r.Detalhe -like '*webview2.sha256*') "detalhe sem o nome esperado: '$($r.Detalhe)'"
         }
     }
 

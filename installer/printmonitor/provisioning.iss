@@ -205,72 +205,6 @@ begin
 end;
 
 { ------------------------------------------------------------------------------------------
-  Driver OBRIGATÓRIO da impressora Bematech MP-4200 TH (spooler x64 v5.0.0.4, instalador Inno 5.5.7)
-  — PRD-PMTRAY-02: sempre empacotado e sempre instalado; /DRIVERBEMATECH=1 é aceito e ignorado.
-
-  Roda DEPOIS do provisionamento bem-sucedido: se o Windows pedir confirmação de driver (ou travar
-  esperando alguém no silencioso), o agente já está instalado e reportando. POLÍTICA DE FALHA
-  (decisão registrada no PRD-PMTRAY-02): "obrigatório" quer dizer sempre tentado, não condição de
-  sucesso — falha do driver NÃO reprova a instalação, vai para o log e para a tela final. Reprovar
-  chamaria o --uninstall e deixaria a estação SEM AGENTE por causa de um driver. O desinstalador do
-  PrintMonitor não remove o driver.
-  ------------------------------------------------------------------------------------------ }
-
-var
-  AvisoDriverBematech: String;
-  DriverBematechInstalado: Boolean;
-
-procedure InstalarDriverBematech();
-var
-  Instalador, LogDriver: String;
-  Codigo: Integer;
-begin
-  AvisoDriverBematech := '';
-  DriverBematechInstalado := False;
-
-  Instalador := ExpandConstant('{tmp}\{#BematechDriverFile}');
-  if not FileExists(Instalador) then
-  begin
-    AvisoDriverBematech := 'o instalador do driver não foi encontrado em ' + Instalador + '.';
-    Log('[PrintMonitor] AVISO: driver da Bematech: ' + AvisoDriverBematech);
-    Exit;
-  end;
-
-  LogDriver := ExpandConstant(PastaDadosPrintMonitor) + '\logs\driver-bematech-' +
-               GetDateTimeString('yyyymmdd_hhnnss', #0, #0) + '.log';
-  Status('Instalando o driver da impressora Bematech MP-4200 TH...');
-
-  { Exec()+ResultCode, nunca [Run] (#101a). SW_SHOW: se o Windows pedir confirmação de driver, a
-    janela precisa aparecer para o operador em vez de travar escondida. }
-  if not Exec(Instalador, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /LOG="' + LogDriver + '"', '',
-              SW_SHOW, ewWaitUntilTerminated, Codigo) then
-    AvisoDriverBematech := 'não foi possível iniciar o instalador do driver (' + SysErrorMessage(Codigo) + ').'
-  else if Codigo <> 0 then
-    AvisoDriverBematech := 'o instalador do driver terminou com código ' + IntToStr(Codigo) +
-                           '. Detalhe em ' + LogDriver + '.'
-  else
-    DriverBematechInstalado := True;
-
-  if AvisoDriverBematech <> '' then
-    Log('[PrintMonitor] AVISO: driver da Bematech: ' + AvisoDriverBematech + ' A instalação do agente segue.')
-  else
-    Log('[PrintMonitor] Driver da Bematech instalado; log em ' + LogDriver);
-end;
-
-{ Linha do driver para a tela final: instalado, ou o aviso de que falhou (a instalação do agente segue). }
-function ResumoDriverBematech(): String;
-begin
-  Result := '';
-
-  if AvisoDriverBematech <> '' then
-    Result := #13#10#13#10 + 'ATENÇÃO — driver da Bematech MP-4200 TH NÃO instalado: ' + AvisoDriverBematech +
-              ' O agente foi instalado normalmente; instale o driver manualmente.'
-  else if DriverBematechInstalado then
-    Result := #13#10#13#10 + 'Driver da Bematech MP-4200 TH instalado. Se a impressora não aparecer, ' +
-              'reinicie o Windows.';
-end;
-
-{ ------------------------------------------------------------------------------------------
   Sucesso COM AVISO (PRD-PMCERT-01, 21/10/2026): o Setup.exe sai com 4 quando a estação ficou
   operante, mas uma etapa NÃO essencial ficou pendente - hoje, o certificado do QZ Tray (sem ele o
   QZ pede confirmação ao imprimir; não deixa a estação muda). Em campo, essa etapa reprovava e este
@@ -417,8 +351,6 @@ begin
     Status('Estação provisionada COM AVISO. Detalhe por etapa em ' + LogDoProvisionamento())
   else
     Status('Estação provisionada. Detalhe por etapa em ' + LogDoProvisionamento());
-
-  InstalarDriverBematech();
 
   { PRD-PMTRAY-05: o serviço já está rodando pelo --all (código 0 ou 4; as falhas saíram acima pelo
     RaiseException). SEMPRE — instalação nova ou upgrade, interativo ou silencioso — sobem agora, como o

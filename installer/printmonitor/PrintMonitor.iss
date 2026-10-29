@@ -10,6 +10,13 @@
 ;  `Setup.exe` já existente e testado. Este script não registra serviço, não escreve a Run key
 ;  e não gera o AgentId — duplicar isso criaria dois lugares para a mesma regra, e o daqui sem
 ;  teste nenhum.
+;
+;  Parâmetros DESCONTINUADOS (aceitos e ignorados — o Inno não reclama de parâmetro desconhecido, e
+;  scripts de rollout de campo seguem funcionando):
+;    /DRIVERBEMATECH=1  — o pacote não traz mais o driver de impressora nenhuma (PRD-PMSEL-INST-01): o
+;                         técnico escolhe a impressora no `Setup.exe --config-ui` e instala o driver do
+;                         modelo por fora. Upgrade não remove o driver que a estação já tem (desinstalador
+;                         próprio; serve à impressora, não ao agente).
 ; ============================================================================================
 
 #ifndef AppVersion
@@ -22,15 +29,6 @@
   ; Nome do arquivo do payload do QZ Tray dentro de payload/. Vazio = instalador sem payload
   ; (permitido: estação que já tem o QZ Tray instalado — a etapa 3 do Setup.exe reporta Ignorado).
   #define QzInstallerFile ""
-#endif
-#ifndef BematechDriverFile
-  ; Nome do instalador do driver da Bematech MP-4200 TH dentro de payload-drivers/ (PRD-PMTRAY-02).
-  #define BematechDriverFile ""
-#endif
-#if BematechDriverFile == ""
-  ; O driver da Bematech é OBRIGATÓRIO desde PRD-PMTRAY-02: o pacote sem ele deixou de existir. O
-  ; build-installer.ps1 também reprova sem o payload (Resolve-PayloadVerificado -Obrigatorio).
-  #error Defina BematechDriverFile pelo build-installer.ps1: o driver da Bematech MP-4200 TH e obrigatorio.
 #endif
 
 #define AppNome "SisPedraCaida PrintMonitor"
@@ -139,10 +137,6 @@ ShowLanguageDialog=no
 LicenseFile=licencas\AVISOS-TERCEIROS.txt
 #endif
 
-; ⚠️ Sem [Tasks] desde PRD-PMTRAY-02: o driver da Bematech deixou de ser opcional (é sempre instalado) e
-; a página "Selecionar Tarefas Adicionais" ficou vazia. /DRIVERBEMATECH=1 continua ACEITO e é ignorado —
-; o Inno não reclama de parâmetro desconhecido, e scripts de rollout antigos seguem funcionando.
-
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 
@@ -163,10 +157,6 @@ Source: "{#PublishDir}\*"; DestDir: "{app}"; \
 Source: "payload\{#QzInstallerFile}"; DestDir: "{tmp}"; Flags: deleteafterinstall
 Source: "licencas\AVISOS-TERCEIROS.txt"; DestDir: "{app}\licencas"; Flags: ignoreversion restartreplace uninsrestartdelete
 #endif
-
-; Driver OBRIGATÓRIO (PRD-PMTRAY-02): sempre extraído; a instalação é por Exec()+ResultCode em
-; InstalarDriverBematech (provisioning.iss), depois do provisionamento — [Run] ignora o código de saída (#101a).
-Source: "payload-drivers\{#BematechDriverFile}"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]
 ; A superfície que torna o endereço da API editável sem reinstalar e sem linha de comando
@@ -196,7 +186,7 @@ Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
 ; ⚠️ `runasoriginaluser` é obrigatório: o instalador roda ELEVADO, e sem a flag a bandeja nasceria como
 ; administrador — ícone na área de notificação errada (ou em nenhuma) e privilégio que ela existe para não ter.
 ; ⚠️ `nowait`: a bandeja fica residente. ⚠️ Apresentação, não provisionamento: [Run] IGNORA o código de saída
-; (#101a), e por isso o provisionamento e o driver continuam em Exec()+ResultCode no provisioning.iss.
+; (#101a), e por isso o provisionamento continua em Exec()+ResultCode no provisioning.iss.
 ; ⚠️ `Check: EstacaoProvisionada`: numa instalação REPROVADA (e desprovisionada) a bandeja não sobe — aberta numa
 ; estação sem agente ela só mostraria "Serviço não registrado" e confundiria o operador (campo, 21/10/2026).
 Filename: "{app}\{#BandejaExe}"; \
@@ -219,8 +209,9 @@ Filename: "{app}\{#SetupExe}"; Parameters: "--uninstall"; \
 
 ; ⚠️ NADA de [Dirs]/[UninstallDelete] sob {commonappdata}: `agent-id` é a identidade da estação
 ; (apagá-lo faz a mesma máquina virar estação nova no painel), e logs/update/coletas são evidência
-; de diagnóstico. O QZ Tray tem desinstalador próprio e não é removido junto — nem o driver obrigatório
-; da Bematech, que serve à impressora (outros programas podem usá-la) e tem desinstalador próprio.
+; de diagnóstico. O QZ Tray tem desinstalador próprio e não é removido junto — nem o driver da Bematech
+; que pacotes até o PRD-PMSEL-INST-01 instalavam: serve à impressora (outros programas podem usá-la) e tem
+; desinstalador próprio.
 ; ⚠️ Épico gestao-impressoras: ao lado do `agent-id` vivem o `enrollment-secret` (prova de posse do
 ; enrolamento — sem ele a API recusa em silêncio a mesma InstallationId) e o `impressao-agent-key`
 ; (credencial retirada na liberação). Upgrade e desinstalação os PRESERVAM: reinstalar uma estação
@@ -296,7 +287,7 @@ begin
     WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
       'Resumo do provisionamento (etapa a etapa):' + #13#10 + LogDoProvisionamento() + #13#10#13#10 +
       'Para trocar o endereço da API depois, use o atalho "Configurar PrintMonitor" no menu Iniciar.' +
-      ResumoProcessosDaSessao() + ResumoAvisoProvisionamento() + ResumoDriverBematech();
+      ResumoProcessosDaSessao() + ResumoAvisoProvisionamento();
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;

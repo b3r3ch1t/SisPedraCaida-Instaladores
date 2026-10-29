@@ -1,5 +1,0 @@
-# Binário de terceiro (instalador do driver da Bematech) e o hash da versão empacotada ficam fora do git:
-# arquivo grande encarece todo clone. A REGRA de verificação é versionada em build-installer.ps1
-# (Resolve-PayloadVerificado), que falha o build se o hash divergir.
-*.exe
-*.sha256

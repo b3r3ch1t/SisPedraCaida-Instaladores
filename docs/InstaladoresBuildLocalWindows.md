@@ -43,21 +43,22 @@ outra coisa (conta de serviço, ACL, registro do runner), abra
 | **Clone em caminho curto** | ex.: `C:\repos\sispedracaida\SisPedraCaida-Backend` | **o que mais reprova.** O MSBuild segue preso a **259** caracteres mesmo com `LongPathsEnabled`, e o caminho mais fundo é o `obj\Release\net10.0-windows\win-x64\refint\<projeto>.dll` **dentro do worktree**: com base longa o `dotnet publish` morre com `MSB3030 … apphost.exe … not found` |
 | **Pester** | já vem no Windows (3.4, em `C:\Program Files\WindowsPowerShell\Modules`) | roda os testes do `Empacotamento.psm1`; o módulo aceita 3.4 ou 5 |
 | **Payload do QZ Tray** — só PrintMonitor | 1 `.exe` + `payload.sha256` em [`installer/printmonitor/payload/`](../installer/printmonitor/payload/) | o `PrintMonitorSetup` embute e executa o QZ Tray na estação; o binário **não é versionado** |
-| **Payload do driver Bematech** — só PrintMonitor | 1 `.exe` + `driver.sha256` em [`installer/printmonitor/payload-drivers/`](../installer/printmonitor/payload-drivers/) | **obrigatório desde o PRD-PMTRAY-02**: o `.iss` faz `#error` sem `BematechDriverFile` e o build falha (`Resolve-PayloadVerificado -Obrigatorio`) |
 | **~500 MB livres por serviço** | — | o publish é self-contained `win-x64` (runtime embutido) |
 
 **O runtime .NET não é pré-requisito da estação.** O publish é `--self-contained`, e os próprios
 `checks.iss` dizem isso ao operador na tela de pré-requisitos. Aqui, na máquina de build, o que se
 instala é o **SDK**.
 
-### Os dois payloads do PrintMonitor
+### O payload do PrintMonitor
 
-Cada um numa pasta própria, com nome de hash próprio — a pasta do QZ aceita **um único** `.exe` e o
-build recusa ambiguidade. Os `README.md` das duas pastas trazem a origem, o formato do `.sha256` e a
-versão homologada; o do driver registra também o SHA-256 e a assinatura Authenticode esperados. O
-`build-installer.ps1` recalcula os hashes, **falha o build** se divergirem (ou se o `.sha256` nomear
-outro arquivo) e copia os binários para o worktree pinado — eles nunca estão lá, porque estão fora do
-git.
+Só o QZ Tray, na sua pasta e com o seu nome de hash — a pasta aceita **um único** `.exe` e o build
+recusa ambiguidade. O `README.md` dela traz a origem, o formato do `.sha256` e a versão homologada. O
+`build-installer.ps1` recalcula o hash, **falha o build** se divergir (ou se o `.sha256` nomear outro
+arquivo) e copia o binário para ao lado do `.iss` — ele nunca está no git.
+
+O driver da Bematech MP-4200 TH **saiu do pacote** (PRD-PMSEL-INST-01): o técnico escolhe a impressora
+no `Setup.exe --config-ui` e instala o driver do modelo por fora. `-DriversPayloadDir` e a pasta
+`payload-drivers/` não existem mais.
 
 Para empacotar **só o TEF**, nenhum payload é necessário.
 
@@ -105,18 +106,16 @@ caso** (serviço de nome mais longo × projeto de nome mais longo) sob a base in
 os 259 caracteres. Passe a pasta onde os worktrees vão nascer — localmente,
 `<repo>\.worktrees` (o default dos scripts).
 
-Para conferir os payloads do PrintMonitor, aponte as duas pastas:
+Para conferir o payload do PrintMonitor, aponte a pasta:
 
 ```powershell
-pwsh scripts/runner-windows-diagnostico.ps1 `
-  -PayloadDir C:\ci-cache\printmonitor-payload `
-  -DriversPayloadDir C:\ci-cache\printmonitor-drivers
+pwsh scripts/runner-windows-diagnostico.ps1 -PayloadDir C:\ci-cache\printmonitor-payload
 ```
 
 A distinção dos desfechos é deliberada: **ausência** de payload é `AVISO` (ou `FALHA` com
 `-ExigirPayload`), mas **dois `.exe` na pasta e hash divergente são `FALHA` sempre** — o build lança
 nos dois casos, em qualquer modo, então relatá-los como aviso seria mentir sobre o que vai acontecer.
-E o texto diz o efeito de cada ausência: o QZ sai do pacote, o driver **reprova o build**.
+E o texto diz o efeito de cada ausência: o QZ sai do pacote do PrintMonitor, o WebView2 do totem.
 
 ---
 
@@ -140,7 +139,7 @@ Os três scripts têm o **mesmo contrato**, não interativo:
 | `-SkipPublish` | — | reaproveita o layout já publicado (iteração no `.iss`) |
 | `-DryRun` | — | valida a cadeia (ISCC, layout, payloads e hashes) **sem compilar** |
 
-Só o PrintMonitor tem, além disso: `-PayloadDir` (QZ Tray), `-DriversPayloadDir` (driver Bematech) e
+Só o PrintMonitor tem, além disso: `-PayloadDir` (QZ Tray) e
 `-OrigensPadrao` (origens do front-adm que o wizard traz pré-preenchidas na página *Identificação
 pelo navegador*; omitido, vale o default do `.iss`).
 
@@ -150,10 +149,9 @@ pelo navegador*; omitido, vale o default do `.iss`).
 # 1. Pacote da dev, pinado no HEAD remoto — procedência rastreável.
 pwsh installer/tefagent/build-installer.ps1 -Ref origin/dev
 
-# 2. PrintMonitor da dev (exige os DOIS payloads).
+# 2. PrintMonitor da dev, com o QZ Tray (sem ele o pacote sai sem o componente).
 pwsh installer/printmonitor/build-installer.ps1 -Ref origin/dev `
-    -PayloadDir C:\ci-cache\printmonitor-payload `
-    -DriversPayloadDir C:\ci-cache\printmonitor-drivers
+    -PayloadDir C:\ci-cache\printmonitor-payload
 
 # 3. Iterar no .iss sem commit: árvore aberta, sem republicar, sem compilar.
 pwsh installer/tefagent/build-installer.ps1 -UseWorkingTree -SkipPublish -DryRun
@@ -185,7 +183,7 @@ Get-FileHash artifacts\installer\TefAgentSetup-3.10.0.exe -Algorithm SHA256
 3. publica o layout self-contained chamando `scripts/<servico>-publish.ps1 -SkipZip` — o layout
    publicado é o **contrato de entrada** da seção `[Files]` do `.iss`, e é validado contra uma lista
    de arquivos obrigatórios (`Assert-FonteCompleta`);
-4. copia os payloads verificados para a `payload\`/`payload-drivers\` ao lado do `.iss` (PrintMonitor);
+4. copia os payloads verificados para a pasta ao lado do `.iss` (`payload\` do PrintMonitor);
 5. compila o `.iss` **deste** repositório com o ISCC, injetando versão e diretório publicado por `/D`;
 6. grava o `.sha256` ao lado do `.exe` e imprime as **duas** procedências: `Origem` (SHA do backend) e
    `Scripts` (SHA deste repositório, marcado quando `installer/` tem alteração local).
@@ -208,10 +206,9 @@ Get-FileHash artifacts\installer\TefAgentSetup-3.10.0.exe -Algorithm SHA256
 - **Inno Setup instalado "por usuário" não existe para outra conta.** É o padrão do `winget` sem
   `--scope machine`, e a causa nº 1 de `Inno Setup (ISCC) FALHA` no diagnóstico: quem preparou a
   máquina instalou no próprio `%LOCALAPPDATA%` e o build roda noutra conta (ou como serviço).
-- **Os dois payloads do PrintMonitor falham de formas diferentes.** Sem o QZ Tray o instalador é
-  gerado **sem** o componente; sem o driver Bematech o build **não sai** (`#error` no `.iss`). Até
-  22/10/2026 o diagnóstico conferia só o primeiro, e máquina verde ainda reprovava o
-  `PrintMonitorSetup` — hoje ele confere os dois.
+- **Payload ausente no build local não reprova o pacote, no CI reprova.** Sem o QZ Tray o
+  `PrintMonitorSetup` é gerado **sem** o componente; no CI todo payload do manifesto é obrigatório.
+  O driver da Bematech, que até o PRD-PMSEL-INST-01 reprovava o build sem ele, saiu do pacote.
 - **O `.iss` não está mais pinado.** Ele sai do checkout atual deste repositório; quem reproduz um
   pacote do CI faz `git checkout <SHA de Scripts>` aqui **e** `-Ref <SHA de Origem>` no backend.
 - **Worktree default é compartilhado entre execuções.** `<workspace>\.worktrees\<servico>-pacote` é
@@ -230,7 +227,7 @@ Get-FileHash artifacts\installer\TefAgentSetup-3.10.0.exe -Algorithm SHA256
 | `Filename too long` no `git worktree add` | `core.longpaths` desligado | `git config --global core.longpaths true` **na conta que builda** |
 | `Inno Setup (ISCC) … não encontrado` | Inno por usuário, ou ausente | `winget install --id JRSoftware.InnoSetup --scope machine` |
 | ISCC reclama de idioma | falta `Languages\BrazilianPortuguese.isl` | reinstalar o Inno com os idiomas |
-| `… é obrigatório e o pacote não sai sem ele` | payload do driver (ou do QZ) ausente | montar a pasta com o `.exe` + `.sha256`, ou passar `-DriversPayloadDir`/`-PayloadDir` |
+| `… é obrigatório e o pacote não sai sem ele` | payload obrigatório ausente (WebView2 do totem) | montar a pasta com o `.exe` + `.sha256`, ou passar `-WebView2BootstrapperPath` |
 | hash divergente no payload | binário trocado sem atualizar o `.sha256` | conferir a origem e regravar o `.sha256` (nunca "ajustar" o hash para o que saiu) |
 | `nenhum SDK compatível com 10.0.300` | SDK fora do `global.json` | `winget install --id Microsoft.DotNet.SDK.10 --scope machine` |
 | exceção de `git` logo no início, só no 5.1 | `pwsh` 7 ausente | instalar o PowerShell 7 e repetir com `pwsh` |

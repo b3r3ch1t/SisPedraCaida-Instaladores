@@ -61,11 +61,6 @@
     DESTE checkout — o binário não é versionado, então ele nunca está no worktree pinado; o script o
     copia para lá antes de compilar. No CI vem de `PRINTMONITOR_PAYLOAD_DIR` (cache do runner).
 
-.PARAMETER DriversPayloadDir
-    Pasta com o instalador do driver da Bematech MP-4200 TH + `driver.sha256` (componente OBRIGATÓRIO desde
-    PRD-PMTRAY-02). Padrão: `installer/printmonitor/payload-drivers` DESTE checkout — fora do git como o do QZ
-    Tray. Sem ele o build FALHA. No CI vem de `PRINTMONITOR_DRIVERS_PAYLOAD_DIR`.
-
 .PARAMETER RemoveWorktree
     Remove o worktree ao final, com sucesso ou falha (CI).
 
@@ -78,7 +73,7 @@
 .PARAMETER DividirEmPartes
     Além do `.exe`, grava o pacote versionável no git: `PrintMonitorSetup-<versão>.zip` (o `.exe` + o
     `.sha256`) em partes `.zip.001`, `.002`… de até 90 MiB — o GitHub recusa arquivo acima de 100 MiB, e o
-    instalador passa disso (QZ Tray com JRE + driver). Remontar: `installer/common/montar-instalador.ps1`
+    instalador passa disso (QZ Tray com JRE). Remontar: `installer/common/montar-instalador.ps1`
     ou o 7-Zip pela `.001`. Desligado por padrão — o CI anexa o `.exe` inteiro à release, que aceita até
     2 GiB.
 
@@ -120,7 +115,6 @@ param(
     [string] $PublishDir = '',
     [string] $OutputDir = '',
     [string] $PayloadDir = '',
-    [string] $DriversPayloadDir = '',
     [AllowEmptyString()]
     [string] $OrigensPadrao,
     [switch] $UseWorkingTree,
@@ -145,7 +139,6 @@ $backendRoot = Resolve-RaizDoBackend -RepoRoot $repoRoot -BackendRoot $BackendRo
 if (-not $PublishDir) { $PublishDir = Join-Path (Join-Path $repoRoot 'artifacts') 'printmonitor' }
 if (-not $OutputDir) { $OutputDir = Join-Path (Join-Path $repoRoot 'artifacts') 'installer' }
 if (-not $PayloadDir) { $PayloadDir = Join-Path $PSScriptRoot 'payload' }
-if (-not $DriversPayloadDir) { $DriversPayloadDir = Join-Path $PSScriptRoot 'payload-drivers' }
 if (-not $WorktreeDir) { $WorktreeDir = Join-Path (Join-Path (Split-Path $repoRoot -Parent) '.worktrees') 'printmonitor-pacote' }
 
 # Cadeia que a fonte pinada (backend) precisa ter: `.iss` + includes, publicador e os projetos do layout.
@@ -190,23 +183,6 @@ function Resolve-Payload {
         -Destino $destino -Descricao 'o QZ Tray embutido'
 }
 
-<#
-.SYNOPSIS
-    Resolve o payload OBRIGATÓRIO do driver da Bematech MP-4200 TH (spooler x64), com a mesma regra do QZ
-    Tray: um único .exe, hash conferido contra `driver.sha256`, cópia para a `payload-drivers` ao lado do script.
-.DESCRIPTION
-    Obrigatório desde PRD-PMTRAY-02: o driver é sempre instalado, e o pacote sem ele deixou de existir.
-    Sem pasta ou sem `.exe` o build FALHA (`-Obrigatorio`) — antes avisava e gerava o pacote sem o
-    componente. O `.iss` também faz `#error` sem `BematechDriverFile`.
-.OUTPUTS
-    Nome do arquivo do driver.
-#>
-function Resolve-PayloadDrivers {
-    $destino = Join-Path $PSScriptRoot 'payload-drivers'
-    return Resolve-PayloadVerificado -PayloadDir $DriversPayloadDir -ArquivoHash 'driver.sha256' `
-        -Destino $destino -Descricao 'o driver da Bematech MP-4200 TH' -Obrigatorio
-}
-
 Write-Host 'PrintMonitor - instalador Windows 10' -ForegroundColor Cyan
 
 try {
@@ -246,7 +222,6 @@ try {
     }
 
     $payloadFile = Resolve-Payload
-    $driverFile = Resolve-PayloadDrivers
 
     if ($DryRun) {
         Write-Host ''
@@ -259,8 +234,7 @@ try {
     $argumentos = @(
         "/DAppVersion=$versaoResolvida",
         "/DPublishDir=$PublishDir",
-        "/DQzInstallerFile=$payloadFile",
-        "/DBematechDriverFile=$driverFile"
+        "/DQzInstallerFile=$payloadFile"
     ) + $definicaoOrigens + @(
         "/O$OutputDir",
         # O .iss sai DESTE repositório (includes relativos ao arquivo) e os binários do commit pinado do
