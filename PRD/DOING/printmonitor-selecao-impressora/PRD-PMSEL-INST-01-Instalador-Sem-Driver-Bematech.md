@@ -1,6 +1,6 @@
 # PRD-PMSEL-INST-01 — Instalador do PrintMonitor sem o driver da Bematech
 
-> **Status:** A fazer — **Última atualização:** 29/10/2026 17:00
+> **Status:** Em andamento — **Última atualização:** 29/10/2026 17:02
 
 ## Contexto
 
