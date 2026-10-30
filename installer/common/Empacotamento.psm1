@@ -710,6 +710,9 @@ function Join-PartesDoArquivo {
 
     Partes cruas do formato anterior do mesmo instalador (`<instalador>.001`…) são apagadas — duas formas do
     mesmo pacote lado a lado confundem quem remonta. O `.zip` inteiro é intermediário e não fica na pasta.
+
+    O `montar-instalador.cmd` é copiado para a pasta das partes (PRD-ELGPRE-02): quem baixa a pasta avulsa
+    remonta por duplo clique, sem o repositório — o Explorer não abre `.zip.001`.
 .PARAMETER Instalador
     `.exe` já hasheado por `Write-ArquivoSha256`; sem `<instalador>.sha256` que confira, lança.
 .PARAMETER TamanhoParte
@@ -747,8 +750,11 @@ function New-PacoteZipEmPartes {
     }
     finally { $arquivoZip.Dispose() }
 
-    try { return @(Split-ArquivoEmPartes -Arquivo $zip -TamanhoParte $TamanhoParte) }
+    try { $partes = @(Split-ArquivoEmPartes -Arquivo $zip -TamanhoParte $TamanhoParte) }
     finally { Remove-Item $zip -Force }
+
+    Copy-Item -Path (Join-Path $PSScriptRoot 'montar-instalador.cmd') -Destination $pasta -Force
+    return $partes
 }
 
 <#
