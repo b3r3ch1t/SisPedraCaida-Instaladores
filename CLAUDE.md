@@ -1,6 +1,8 @@
 # SisPedraCaida-Instaladores — Guia
 
-> **Última atualização deste CLAUDE.md:** 29/10/2026 17:30 (horário local, UTC-3) — o `PrintMonitorSetup` **não traz
+> **Última atualização deste CLAUDE.md:** 30/10/2026 07:45 (horário local, UTC-3) — os instaladores da **`dev` têm a
+> versão da API** (armadilha **v**): o backend dispara com `-f versao` e, sem `sha`, a `dev` empacota o último commit
+> construído · antes (29/10/2026 17:30): o `PrintMonitorSetup` **não traz
 > mais o driver da Bematech** (PRD-PMSEL-INST-01, épico `printmonitor-selecao-impressora`): sai o payload, o
 > `-DriversPayloadDir` e a variável `PRINTMONITOR_DRIVERS_PAYLOAD_DIR`; `/DRIVERBEMATECH=1` segue aceito e ignorado
 > · antes (27/10/2026 15:54): o `TotemSetup` **de campo já traz o
@@ -108,8 +110,8 @@ Contrato completo dos scripts e diagnóstico por mensagem de erro:
 
 | Workflow | Gatilho | O que faz |
 |---|---|---|
-| [`instaladores-windows.yml`](.github/workflows/instaladores-windows.yml) | `workflow_dispatch` (o backend dispara) e `workflow_call` | `matriz` (ubuntu: clona o backend no `sha`, resolve versão pelo manifest do canal, filtra a matriz) → `testar` (Windows: Pester + guardas contra o backend naquele SHA) → `empacotar` (Windows, um worktree por serviço, `fail-fast: false`) → `publicar` (ubuntu: confere `.sha256`, publica **aqui**) |
-| [`instaladores-dev.yml`](.github/workflows/instaladores-dev.yml) | push na `dev` deste repo em `installer/**`, `tests/**` ou nos dois workflows | chama o anterior com `canal=dev`, HEAD da `dev` do backend |
+| [`instaladores-windows.yml`](.github/workflows/instaladores-windows.yml) | `workflow_dispatch` (o backend dispara) e `workflow_call` | `matriz` (ubuntu: clona o backend no `sha`, resolve a versão — informada, da tag, na `dev` o `VersionPrefix` do commit, na `prod` o manifest —, filtra a matriz) → `testar` (Windows: Pester + guardas contra o backend naquele SHA) → `empacotar` (Windows, um worktree por serviço, `fail-fast: false`) → `publicar` (ubuntu: confere `.sha256`, publica **aqui**) |
+| [`instaladores-dev.yml`](.github/workflows/instaladores-dev.yml) | push na `dev` deste repo em `installer/**`, `tests/**` ou nos dois workflows | chama o anterior com `canal=dev`, último commit **construído** da `dev` do backend (armadilha **v**) |
 | [`runner-windows-diagnostico.yml`](.github/workflows/runner-windows-diagnostico.yml) | manual | `runner-windows-diagnostico.ps1 -ExigirPayload` + Pester, como a conta do serviço do runner |
 | [`ci.yml`](.github/workflows/ci.yml) | PR para `dev`/`prod` | Pester + guardas (`windows-latest`, backend `dev` ou `prod` conforme a base) |
 | [`commitlint.yml`](.github/workflows/commitlint.yml) | PR para `dev`/`prod` | commits e título em Conventional Commits ([`commitlint.config.mjs`](commitlint.config.mjs), header ≤ 100) |
@@ -119,7 +121,7 @@ Contrato completo dos scripts e diagnóstico por mensagem de erro:
 | Evento no backend | Workflow de lá | Chamada aqui |
 |---|---|---|
 | push na `prod` (com ou sem release) | `release-please-prod.yml`, job `instaladores` | `--ref prod -f canal=prod -f sha -f versao -f tag` |
-| push na `dev` que toque os agentes (`paths`) | `instaladores-dev.yml` | `--ref dev -f canal=dev -f sha` |
+| push na `dev` que muda a versão da API ou os agentes (passo `decidir`) | `instaladores-dev.yml` | `--ref dev -f canal=dev -f sha -f versao` |
 
 **Publicação (neste repositório):** `prod` → release `prod-vX.Y.Z` (mesma tag da release do backend,
 criada aqui com `--target` no commit dos scripts se não existir) com `.exe` + `.sha256` e a tabela de
@@ -185,3 +187,4 @@ repositório (`m`–`p`).
 | s | Pacotes gerados e o job reprova com `Artifact storage quota has been hit` | A cota de artifacts é **da conta**, somada entre os repositórios privados (o backend guarda ~35 MB de `coverage-report` por run). Os `.exe` (~350 MB por run) **não** passam por artifact: `gh release upload` do runner direto para a release; não reintroduzir `upload-artifact` para pacote |
 | t | Payload novo no manifesto e o job reprova "Payload ausente" com a variável criada; ou o diagnóstico fica verde sem conferir o cache novo | O contexto `vars` do Actions **não é enumerável**: o workflow só enxerga a variável que declara no `env:`. Toda `variavel` de `payloads` precisa de linha no `env:` do `instaladores-windows.yml` **e** do `runner-windows-diagnostico.yml` — guarda `TodaVariavelDePayload_EstaNosDoisWorkflows`. E crie o cache e a variável **antes** de mesclar na `dev`: o push dispara o empacotamento |
 | u | Guarda verde no PR para a `dev` e vermelha na promoção para a `prod` (ou no `testar` da reemissão), com o pacote certo | A guarda lia algo do backend que só existe na `dev` de lá (o runbook com `/CONTEUDOURL=`, PRD-TOTEMINST-01). O CI de PR para a `prod` e o `testar` de prod rodam contra a **`prod` do backend**. Guarda só lê **código** do backend que já esteja na versão empacotada; nunca documentação. Antes de promover, rode `dotnet test … -p:BackendDir=<worktree do backend na origin/prod>/` |
+| v | Instaladores da `dev-latest` **versões atrás** da API (`5.7.0` com a API da `dev` em `5.13.0`, 30/10/2026), ou **uma à frente** | A API da `dev` reporta o `VersionPrefix` do commit **construído**, e o commit de versão do release-please não é construído (`paths-ignore` do publish de lá) — mesclado com o `GITHUB_TOKEN`, nem dispara workflow, então o gatilho por `paths` que esperava por ele nunca empacotava o número novo. O backend (#134 de lá) agora dispara no gatilho do publish da `dev`, só quando a versão ou os agentes mudam, com `-f versao`. Aqui, sem `versao` a `dev` lê o `VersionPrefix` do commit empacotado, e **sem `sha` volta do HEAD da `dev` do backend até o último commit construído** (o primeiro, na linha de primeiros pais, que muda algo além de `Directory.Build.props`, `CHANGELOG.md` e `.release-please-manifest.json`) — empacotar o HEAD daria o número do commit de versão, que a API ainda não tem. Conferir: `GET /api/v1/versao` da `dev` = versão dos `.exe` da `dev-latest` |
