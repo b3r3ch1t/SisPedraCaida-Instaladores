@@ -1,6 +1,9 @@
 # SisPedraCaida-Instaladores — Guia
 
-> **Última atualização deste CLAUDE.md:** 30/10/2026 13:30 (horário local, UTC-3) — o empacotamento da **`dev`**
+> **Última atualização deste CLAUDE.md:** 30/10/2026 16:10 (horário local, UTC-3) — o `TefAgentSetup` **não baixa
+> mais o Elgin TEF HUB**: TEF HUB e E1_Connect ausentes **bloqueiam** a instalação com o link de download (armadilha
+> **w**, PRD-ELGPRE-01); o PrintMonitor em partes leva o **`montar-instalador.cmd`** (duplo clique, armadilha **l**,
+> PRD-ELGPRE-02) · antes (30/10/2026 13:30): o empacotamento da **`dev`**
 > é **só manual** (sem `push`, aqui e no backend) · antes (30/10/2026 07:45): os instaladores da **`dev` têm a
 > versão da API** (armadilha **v**): o backend dispara com `-f versao` e, sem `sha`, a `dev` empacota o último commit
 > construído · antes (29/10/2026 17:30): o `PrintMonitorSetup` **não traz
@@ -76,7 +79,7 @@ workflows. Consequências:
 installer/
 ├── instaladores-ci.json        # matriz do CI por canal (fonte única; guarda InstaladoresCiArchitectureTests)
 ├── assets/sispedracaida.ico
-├── common/                     # Empacotamento.psm1 (núcleo) + Pester + montar-instalador.ps1
+├── common/                     # Empacotamento.psm1 (núcleo) + Pester + montar-instalador.ps1/.cmd
 ├── tefagent/  printmonitor/  totem/   # .iss + includes + build-installer.ps1 (+ payloads fora do git)
 scripts/runner-windows-diagnostico.ps1   # pré-requisitos do runner Windows
 scripts/preparar-runner-windows.ps1      # prepara e registra o runner (admin, idempotente)
@@ -178,7 +181,7 @@ repositório (`m`–`p`).
 | i | `dev-latest`/`prod-latest` servindo duas versões | Tag móvel movida pela API **antes** do upload, assets anteriores apagados (`--clobber` só cobre nome igual). A tag aponta para o commit **deste** repo — tag não aponta para commit de outro repositório; o SHA do backend vai nas notas |
 | j | Ensaio da dev cancela o release da prod | `cancel-in-progress` só na dev, com o canal na chave do `concurrency.group` |
 | k | Vários `.exe` com o mesmo nome na dev | O nome repete entre SHAs; a procedência está nas notas da release (SHA do backend e dos scripts) e no `.sha256` |
-| l | Push recusado / clone pesado | PrintMonitor (~200 MB) passa de 100 MiB: versionar só `PrintMonitorSetup-X.Y.Z.zip.001…` (zip de até 90 MiB, `-DividirEmPartes`) + `.exe.sha256` com `git add -f`; remontar e conferir com `montar-instalador.ps1` antes; **uma versão só** (o mesmo commit faz `git rm` da anterior) |
+| l | Push recusado / clone pesado | PrintMonitor (~200 MB) passa de 100 MiB: versionar só `PrintMonitorSetup-X.Y.Z.zip.001…` (zip de até 90 MiB, `-DividirEmPartes`) + `.exe.sha256` + `montar-instalador.cmd` com `git add -f`; remontar e conferir com `montar-instalador.ps1` antes; **uma versão só** (o mesmo commit faz `git rm` da anterior). Fora do repo, a TI monta pelo **`.cmd`** (duplo clique): nunca documente um `copy /b` com lista fixa de partes — o 5.14.0 tem duas, a receita citava `.003` e o `copy` abortava (30/10/2026). O `.cmd` é `-text` no `.gitattributes`: baixado pelo `raw`, LF quebra o `goto` |
 | m | Job `matriz` reprova "SISPEDRACAIDA_BACKEND_TOKEN ausente" / checkout do backend dá 404 | Os dois repos são privados e o `GITHUB_TOKEN` não cruza repositório: token fine-grained com `contents: read` no backend (runbook §6.1). 404 no checkout = token sem acesso ao backend |
 | n | O backend "disparou" e nada empacotou | `gh workflow run` é fire-and-forget: o run do backend fica verde e o resultado está **aqui**. Conferir: `INSTALADORES_WINDOWS` neste repo, `--ref` existente (`dev`/`prod`) e o workflow presente nessa branch |
 | o | Guarda verde aqui e estação quebrada em campo | A guarda compara com o backend que ela compilou: o CI de PR usa a `dev` do backend. Mudança de contrato vai **backend primeiro**; o `testar` do empacotamento repete as guardas contra o SHA exato antes de empacotar |
@@ -189,3 +192,4 @@ repositório (`m`–`p`).
 | t | Payload novo no manifesto e o job reprova "Payload ausente" com a variável criada; ou o diagnóstico fica verde sem conferir o cache novo | O contexto `vars` do Actions **não é enumerável**: o workflow só enxerga a variável que declara no `env:`. Toda `variavel` de `payloads` precisa de linha no `env:` do `instaladores-windows.yml` **e** do `runner-windows-diagnostico.yml` — guarda `TodaVariavelDePayload_EstaNosDoisWorkflows`. E crie o cache e a variável **antes** de mesclar na `dev`: o push dispara o empacotamento |
 | u | Guarda verde no PR para a `dev` e vermelha na promoção para a `prod` (ou no `testar` da reemissão), com o pacote certo | A guarda lia algo do backend que só existe na `dev` de lá (o runbook com `/CONTEUDOURL=`, PRD-TOTEMINST-01). O CI de PR para a `prod` e o `testar` de prod rodam contra a **`prod` do backend**. Guarda só lê **código** do backend que já esteja na versão empacotada; nunca documentação. Antes de promover, rode `dotnet test … -p:BackendDir=<worktree do backend na origin/prod>/` |
 | v | Instaladores da `dev-latest` **versões atrás** da API (`5.7.0` com a API da `dev` em `5.13.0`, 30/10/2026), ou **uma à frente** | A API da `dev` reporta o `VersionPrefix` do commit **construído**, e o commit de versão do release-please não é construído (`paths-ignore` do publish de lá) — mesclado com o `GITHUB_TOKEN`, nem dispara workflow, então o gatilho por `paths` que esperava por ele nunca empacotava o número novo. O backend (#134 de lá) agora dispara no gatilho do publish da `dev`, só quando a versão ou os agentes mudam, com `-f versao`. Aqui, sem `versao` a `dev` lê o `VersionPrefix` do commit empacotado, e **sem `sha` volta do HEAD da `dev` do backend até o último commit construído** (o primeiro, na linha de primeiros pais, que muda algo além de `Directory.Build.props`, `CHANGELOG.md` e `.release-please-manifest.json`) — empacotar o HEAD daria o número do commit de versão, que a API ainda não tem. Conferir: `GET /api/v1/versao` da `dev` = versão dos `.exe` da `dev-latest` |
+| w | `TefAgentSetup` trava em "Elgin TEF HUB"/"E1_Connect" e nunca termina (até 30/10/2026) | O instalador baixava o TEF HUB e o rodava com `/VERYSILENT` e `ewWaitUntilTerminated`; o pacote da Elgin encadeia os instaladores dos componentes, que não obedecem ao silencioso. Desde o PRD-ELGPRE-01 os dois são **pré-requisito bloqueante** no `InitializeSetup` (diálogo com o link da pasta oficial + "Verificar novamente"; silencioso sai com 1), `/SEMTEFHUB=1` é aceito e ignorado. Nunca `Exec` de instalador de terceiro: guarda `TefAgentPreRequisitosElginGuardTests` |
