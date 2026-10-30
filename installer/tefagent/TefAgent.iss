@@ -198,8 +198,8 @@ Filename: "{app}\{#SetupExe}"; Parameters: "--uninstall"; \
 [Code]
 #include "checks.iss"
 #include "pages.iss"
-{ Depois de checks.iss e pages.iss de propósito: consome o `TefHubInstalado` de um e o
-  `Parametro` do outro.
+{ Depois de checks.iss e pages.iss de propósito: consome o `TefHubInstalado`/`E1ConnectInstalado`
+  de um e o `Parametro` do outro.
   ⚠️ Comentário aqui é de chaves ou `//`, NUNCA `;`: dentro de [Code] o compilador lê Pascal, e a
   linha iniciada por `;` reprova com "'BEGIN' expected" apontando para ela — o `;` só comenta nas
   seções de diretiva, acima. E comentário de chaves NÃO aninha: uma chave de fechamento no meio
@@ -220,6 +220,14 @@ begin
   Result := True;
 
   if not ChecagensBloqueantesAprovadas() then
+  begin
+    Result := False;
+    Exit;
+  end;
+
+  { TEF HUB e E1_Connect (PRD-ELGPRE-01): sem eles o caixa não processa cartão. Aqui, antes do
+    wizard, para valer também no silencioso; o diálogo do interativo segura até o técnico instalar. }
+  if not GarantirPreRequisitosElgin() then
   begin
     Result := False;
     Exit;
@@ -254,7 +262,6 @@ end;
 procedure InitializeWizard();
 begin
   CriarPaginasDoWizard();
-  CriarPaginaDownloadTefHub();
 end;
 
 { Na tela final, o caminho do log do provisionamento — é ele que responde "por que esse terminal
@@ -318,13 +325,6 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := ValidarPagina(CurPageID);
-
-  { O pré-requisito é resolvido na saída da tela "Pronto para instalar": depois de o operador ter
-    confirmado tudo e ANTES de o primeiro arquivo nosso ser copiado. Mais cedo, o download de
-    ~396 MB começaria antes de o operador decidir se instala; mais tarde, o agente já estaria no
-    disco apontando para um pinpad que ninguém instalou. }
-  if Result and (CurPageID = wpReady) then
-    Result := GarantirTefHub();
 end;
 
 { Resumo da tela "Pronto para instalar". }
