@@ -12,7 +12,8 @@ name: Instaladores Windows
 # QUEM CHAMA:
 #   - o backend, por `gh workflow run` (workflow_dispatch) com o token INSTALADORES_DISPATCH_TOKEN:
 #       · release-please-prod.yml → `--ref prod -f canal=prod -f sha -f versao -f tag`, no push da prod;
-#       · instaladores-dev.yml    → `--ref dev  -f canal=dev  -f sha`, no push da dev que toca os agentes.
+#       · instaladores-dev.yml    → `--ref dev  -f canal=dev  -f sha -f versao`, no push da dev que muda a
+#         versão da API ou os agentes (a versão é o VersionPrefix do commit, a mesma da API).
 #     Cruzar repositório por `workflow_call` não é possível: o reusable de um repo privado só é
 #     chamável do mesmo repositório (ou de outro com acesso concedido pela organização — conta pessoal
 #     não tem essa opção).
@@ -143,12 +144,16 @@ jobs:
           # produção.
           ref: ${{ inputs.sha || inputs.canal }}
           path: backend
+          # Histórico completo: na dev sem `sha`, o resolver volta pela linha de primeiros pais até o
+          # último commit que o publish da dev construiu.
+          fetch-depth: 0
 
       - name: Resolver commit, versão e matriz
         id: resolver
         shell: bash
         env:
           CANAL: ${{ inputs.canal }}
+          SHA_INFORMADO: ${{ inputs.sha }}
           VERSAO_INFORMADA: ${{ inputs.versao }}
           TAG_INFORMADA: ${{ inputs.tag }}
         run: |
@@ -165,11 +170,27 @@ jobs:
           scripts_sha="$(git rev-parse HEAD)"
           tag="${TAG_INFORMADA:-}"
 
-          # Versão: a informada > a da tag (prefixo do canal) > o núcleo do manifesto do canal.
+          # A DEV TEM A VERSÃO DA API (30/10/2026). A API da dev reporta o VersionPrefix do commit em
+          # que a imagem foi construída, e o commit de versão do release-please não é construído (está
+          # nos `paths-ignore` do publish do backend). Sem `sha` informado, o HEAD da dev do backend
+          # costuma ser justamente esse commit — e o pacote sairia uma versão à frente da API. Volta
+          # pela linha de primeiros pais até o último commit que muda algo além dos três arquivos dele.
+          if [ "$CANAL" = 'dev' ] && [ -z "${SHA_INFORMADO:-}" ]; then
+            sha="$(git -C backend log --first-parent -n 1 --format=%H HEAD -- . \
+              ':(exclude)Directory.Build.props' ':(exclude)CHANGELOG.md' \
+              ':(exclude).release-please-manifest.json')"
+          fi
+
+          # Versão: a informada > a da tag (prefixo do canal) > na dev, o VersionPrefix do commit
+          # empacotado (a mesma régua da API e dos *-publish.ps1); na prod, o núcleo do manifesto.
           # Só X.Y.Z numérico: o Inno grava VersionInfoVersion, que recusa sufixo (-rc, -sha…) — é
           # também o que impede apontar este workflow para a staging sem resolver o sufixo antes.
           versao="${VERSAO_INFORMADA:-}"
           if [ -z "$versao" ] && [ -n "$tag" ]; then versao="${tag#"$prefixo"}"; fi
+          if [ -z "$versao" ] && [ "$CANAL" = 'dev' ]; then
+            versao="$(git -C backend show "$sha:Directory.Build.props" \
+              | sed -n 's:.*<VersionPrefix>\([0-9][0-9.]*\)</VersionPrefix>.*:\1:p' | head -n 1)"
+          fi
           if [ -z "$versao" ]; then versao="$(jq -r '."."' "$manifesto")"; fi
           if ! [[ "$versao" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Versão '$versao' fora de X.Y.Z (canal '$CANAL', tag '${tag}')."

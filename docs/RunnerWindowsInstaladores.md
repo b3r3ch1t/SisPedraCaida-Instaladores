@@ -245,7 +245,7 @@ reprova — e, como os dois ficam atrás de `INSTALADORES_WINDOWS`, nenhum roda 
 | Evento | Workflow | Chamada |
 |---|---|---|
 | Push na `prod` do backend (com ou sem release) | backend: `release-please-prod.yml`, job `instaladores` | `gh workflow run instaladores-windows.yml --ref prod -f canal=prod -f sha -f versao -f tag` |
-| Push na `dev` do backend que toque os agentes | backend: `instaladores-dev.yml` (filtro de `paths` lá) | `gh workflow run instaladores-windows.yml --ref dev -f canal=dev -f sha` |
+| Push na `dev` do backend que muda a versão da API ou os agentes | backend: `instaladores-dev.yml` (passo `decidir` lá, mesmo gatilho do publish da `dev`) | `gh workflow run instaladores-windows.yml --ref dev -f canal=dev -f sha -f versao` |
 | Push na `dev` deste repositório que toque `installer/`, `tests/` ou os workflows | daqui: `instaladores-dev.yml` | `workflow_call`, HEAD da `dev` do backend |
 
 O disparo é **fire-and-forget**: o run do backend fica verde ao disparar, e o resultado do empacotamento
