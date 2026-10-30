@@ -16,6 +16,11 @@
 *.ps1 text eol=crlf
 *.sln text eol=crlf
 
+# Montador que vai para a estação avulso: baixado pelo "raw" do GitHub chega o BLOB, e um .cmd com LF
+# erra o goto para rótulo. `-text` guarda o CRLF no próprio blob (PRD-ELGPRE-02).
+installer/common/montar-instalador.cmd -text
+artifacts/installer/montar-instalador.cmd -text
+
 # Hooks do husky são shell scripts (sem extensão) — CRLF quebra o interpretador no Linux (dev/CI).
 .husky/** text eol=lf
 

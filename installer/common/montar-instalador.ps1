@@ -12,10 +12,10 @@
     Pacotes anteriores a 23/10/2026 eram as partes cruas do `.exe` (`<instalador>.001`…); sem
     `.zip.001` ao lado, o script remonta esse formato.
 
-    Sem PowerShell à mão: o 7-Zip abre a `.zip.001` direto; ou, no cmd,
-    `copy /b PrintMonitorSetup-X.Y.Z.zip.001+PrintMonitorSetup-X.Y.Z.zip.002+PrintMonitorSetup-X.Y.Z.zip.003 PrintMonitorSetup-X.Y.Z.zip`,
-    extrair pelo Explorer e conferir com `certutil -hashfile PrintMonitorSetup-X.Y.Z.exe SHA256` contra
-    o `.sha256`.
+    Fora do repositório (pasta baixada avulsa do GitHub): duplo clique no `montar-instalador.cmd` que vai
+    ao lado das partes (PRD-ELGPRE-02) — junta, extrai e confere o hash só com o que o Windows traz. O
+    7-Zip também abre a `.zip.001` direto. ⚠️ Não monte um `copy /b` com a lista de partes à mão: o
+    número de partes muda entre versões (o 5.14.0 tem duas), e uma parte que não existe aborta o `copy`.
 
     Compatível com Windows PowerShell 5.1.
 

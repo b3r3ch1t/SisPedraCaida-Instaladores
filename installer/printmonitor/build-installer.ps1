@@ -73,8 +73,8 @@
 .PARAMETER DividirEmPartes
     Além do `.exe`, grava o pacote versionável no git: `PrintMonitorSetup-<versão>.zip` (o `.exe` + o
     `.sha256`) em partes `.zip.001`, `.002`… de até 90 MiB — o GitHub recusa arquivo acima de 100 MiB, e o
-    instalador passa disso (QZ Tray com JRE). Remontar: `installer/common/montar-instalador.ps1`
-    ou o 7-Zip pela `.001`. Desligado por padrão — o CI anexa o `.exe` inteiro à release, que aceita até
+    instalador passa disso (QZ Tray com JRE). Remontar: `installer/common/montar-instalador.ps1`,
+    o `montar-instalador.cmd` que vai ao lado das partes (duplo clique, sem o repo) ou o 7-Zip pela `.001`. Desligado por padrão — o CI anexa o `.exe` inteiro à release, que aceita até
     2 GiB.
 
 .PARAMETER OrigensPadrao
@@ -262,6 +262,7 @@ try {
     if ($partes.Count -gt 0) {
         Write-Host "Partes:     $(($partes | ForEach-Object { Split-Path $_ -Leaf }) -join ', ')" -ForegroundColor Green
         Write-Host '            remontar: pwsh installer/common/montar-instalador.ps1 -Instalador <.exe>' -ForegroundColor DarkGray
+        Write-Host '            na estacao: duplo clique no montar-instalador.cmd ao lado das partes (versione-o junto)' -ForegroundColor DarkGray
     }
     if ($origem.Commit) {
         Write-Host "Origem:     $($origem.Descricao)" -ForegroundColor Green

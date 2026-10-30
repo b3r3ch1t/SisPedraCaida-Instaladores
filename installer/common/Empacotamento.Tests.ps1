@@ -619,6 +619,28 @@ Describe 'Empacotamento.psm1' {
                 Write-ArquivoSha256 -Arquivo $arquivo | Out-Null
                 return $arquivo
             }
+
+            # Pacote em 4 partes numa pasta só com as partes e o .cmd: o que a TI baixa do GitHub.
+            function Nova-PastaAvulsa {
+                param([string] $Nome)
+                $origem = Novo-Instalador -Pasta (Join-Path $TestDrive "$Nome-origem")
+                New-PacoteZipEmPartes -Instalador $origem -TamanhoParte 2000 | Out-Null
+                $avulsa = Join-Path $TestDrive $Nome
+                New-Item -ItemType Directory -Path $avulsa -Force | Out-Null
+                Copy-Item -Path (Join-Path (Split-Path $origem -Parent) 'Setup-1.2.3.zip.*') -Destination $avulsa
+                Copy-Item -Path (Join-Path (Split-Path $origem -Parent) 'montar-instalador.cmd') -Destination $avulsa
+                return [pscustomobject]@{
+                    Pasta    = $avulsa
+                    Exe      = Join-Path $avulsa 'Setup-1.2.3.exe'
+                    Original = (Get-FileHash -Path $origem -Algorithm SHA256).Hash
+                }
+            }
+
+            function Invoke-Montador {
+                param([string] $Pasta)
+                & (Join-Path $Pasta 'montar-instalador.cmd') /semPausa | Out-Null
+                return $LASTEXITCODE
+            }
         }
 
         It 'grava Setup-1.2.3.zip.001… dentro do limite, sem deixar o .zip inteiro' {
@@ -642,6 +664,56 @@ Describe 'Empacotamento.psm1' {
             Confirmar ($extraido -eq $arquivo) "extraído em '$extraido'"
             Confirmar ((Get-FileHash -Path $extraido -Algorithm SHA256).Hash -eq $original) 'hash do extraído diverge'
             Confirmar (Test-ArquivoSha256 -Arquivo $extraido) 'o .sha256 de dentro do zip não confere'
+        }
+
+        It 'copia o montar-instalador.cmd para a pasta das partes' {
+            $arquivo = Novo-Instalador -Pasta (Join-Path $TestDrive 'com-montador')
+            New-PacoteZipEmPartes -Instalador $arquivo -TamanhoParte 2000 | Out-Null
+            $copia = Join-Path (Split-Path $arquivo -Parent) 'montar-instalador.cmd'
+            $fonte = Join-Path $PSScriptRoot 'montar-instalador.cmd'
+
+            Confirmar (Test-Path $copia) 'montar-instalador.cmd ausente da pasta das partes'
+            Confirmar ((Get-FileHash $copia).Hash -eq (Get-FileHash $fonte).Hash) 'a cópia diverge do montar-instalador.cmd'
+        }
+
+        It 'montar-instalador.cmd: remonta, extrai e confere o hash por conta própria' {
+            $avulsa = Nova-PastaAvulsa -Nome 'avulsa-ok'
+            $codigo = Invoke-Montador -Pasta $avulsa.Pasta
+
+            Confirmar ($codigo -eq 0) "código de saída $codigo"
+            Confirmar ((Get-FileHash -Path $avulsa.Exe -Algorithm SHA256).Hash -eq $avulsa.Original) 'hash do .exe montado diverge'
+            Confirmar (Test-ArquivoSha256 -Arquivo $avulsa.Exe) 'o .sha256 extraído não confere'
+            Confirmar (-not (Test-Path (Join-Path $avulsa.Pasta 'Setup-1.2.3.zip'))) 'o .zip intermediário ficou na pasta'
+        }
+
+        It 'montar-instalador.cmd: falha e não deixa .exe com parte corrompida' {
+            $avulsa = Nova-PastaAvulsa -Nome 'avulsa-corrompida'
+            $parte = Join-Path $avulsa.Pasta 'Setup-1.2.3.zip.002'
+            $bytes = [System.IO.File]::ReadAllBytes($parte)
+            $bytes[1000] = $bytes[1000] -bxor 0xFF
+            [System.IO.File]::WriteAllBytes($parte, $bytes)
+            $codigo = Invoke-Montador -Pasta $avulsa.Pasta
+
+            Confirmar ($codigo -ne 0) 'montou com parte corrompida'
+            Confirmar (-not (Test-Path $avulsa.Exe)) 'o .exe corrompido ficou na pasta'
+        }
+
+        It 'montar-instalador.cmd: falha e não deixa .exe com parte faltando no meio' {
+            $avulsa = Nova-PastaAvulsa -Nome 'avulsa-lacuna'
+            Remove-Item (Join-Path $avulsa.Pasta 'Setup-1.2.3.zip.002')
+            $codigo = Invoke-Montador -Pasta $avulsa.Pasta
+
+            Confirmar ($codigo -ne 0) 'montou com a .002 faltando'
+            Confirmar (-not (Test-Path $avulsa.Exe)) 'o .exe truncado ficou na pasta'
+        }
+
+        It 'montar-instalador.cmd: falha quando a pasta não tem partes' {
+            $vazia = Join-Path $TestDrive 'avulsa-vazia'
+            New-Item -ItemType Directory -Path $vazia -Force | Out-Null
+            Copy-Item -Path (Join-Path $PSScriptRoot 'montar-instalador.cmd') -Destination $vazia
+            $codigo = Invoke-Montador -Pasta $vazia
+
+            Confirmar ($codigo -ne 0) 'saiu com sucesso sem parte nenhuma'
         }
 
         It 'apaga as partes cruas do formato anterior do mesmo instalador' {
