@@ -150,7 +150,9 @@ end;
   reenviá-las ligaria o loopback de uma estação em que o suporte o desligou de propósito. Numa estação
   sem origens gravadas, as do pacote (OrigensPadrao) contam como mudança: vão ao Setup.exe, que liga o
   loopback (LoopbackPrint:Enabled=true) e gera o RouteSecret que faltar — a identificação pelo navegador
-  sai funcionando da instalação padrão.
+  sai funcionando da instalação padrão. A escolha de impressoras (PRD-PMSEL-INST-02) segue a mesma regra:
+  só vai quando difere da gravada; e a padrão vazia não precisa de linha — informadas as habilitadas, o
+  Setup.exe grava a padrão como vazia (nenhuma).
 
   Vive na pasta temporária do Inno (privada desta execução, removida no fim) e é apagado logo depois da
   chamada pelo ExecutarProvisionamento. Devolve o caminho, ou '' quando não há nada a levar. }
@@ -161,7 +163,7 @@ var
 begin
   Result := '';
   N := 0;
-  SetArrayLength(Linhas, 5);
+  SetArrayLength(Linhas, 7);
 
   if ValorChave <> '' then
   begin
@@ -191,6 +193,18 @@ begin
   begin
     Linhas[N] := 'LoopbackPrintOrigensPermitidas=' + ValorOrigens;
     N := N + 1;
+  end;
+
+  if SelecaoDeImpressorasMudou() then
+  begin
+    Linhas[N] := 'ImpressorasHabilitadas=' + ValorImpressoras;
+    N := N + 1;
+
+    if ValorImpressoraPadrao <> '' then
+    begin
+      Linhas[N] := 'ImpressoraPadrao=' + ValorImpressoraPadrao;
+      N := N + 1;
+    end;
   end;
 
   if N = 0 then

@@ -288,6 +288,435 @@ begin
               'máquina como não identificada)';
 end;
 
+{ ------------------------------------------------------------------------------------------
+  Impressoras desta estação (PRD-PMSEL-INST-02): quais filas do spooler o PrintMonitor usa e qual é a
+  padrão. Só a fila escolhida, de qualquer modelo, é aceita pelo servidor; sem escolha, só os modelos
+  homologados da lista fixa de lá.
+
+  As regras abaixo ESPELHAM SelecaoImpressorasEstacao (PrintMonitor.Core): Criar (apara, descarta vazio e
+  repetição sem diferenciar maiúsculas, a padrão entra nas habilitadas, na frente se faltava) e
+  MontarOpcoes (escolhida que o spooler não tem aparece marcada e sinalizada). A escolha vai ao Setup.exe
+  pelo arquivo de resposta (ImpressorasHabilitadas / ImpressoraPadrao), que grava as variáveis de máquina
+  relidas pelo Helper a cada coleta. Alterar um lado exige alterar o outro (guarda em InstaladorInnoGuardTests).
+
+  ⚠️ O Setup.exe não tem como receber "nenhuma": as duas chaves ausentes preservam o gravado. Por isso
+  desmarcar tudo aqui MANTÉM a escolha gravada (o Avançar avisa) — retirar é pelo "Configurar PrintMonitor".
+  ------------------------------------------------------------------------------------------ }
+
+const
+  VarImpressorasHabilitadas = 'PrintMonitor__Enrollment__ImpressorasHabilitadas';
+  VarImpressoraPadrao = 'PrintMonitor__Enrollment__ImpressoraPadrao';
+  { Nome de fila do Windows não aceita a barra vertical; vírgula e ponto e vírgula, sim. }
+  SeparadorImpressoras = '|';
+  SemImpressoraPadrao = '(nenhuma)';
+  SufixoImpressoraAusente = ' (não encontrada nesta máquina)';
+
+var
+  PaginaImpressoras: TWizardPage;
+  ListaImpressoras: TNewCheckListBox;
+  ComboImpressoraPadrao: TNewComboBox;
+  RotuloImpressoras: TNewStaticText;
+  { Nome da fila de cada linha da lista, no mesmo índice: o rótulo da ausente leva o sufixo. }
+  NomesDasOpcoesDeImpressora: TArrayOfString;
+  FilasDoSpooler: TArrayOfString;
+  SpoolerLido: Boolean;
+  ErroDoSpooler: String;
+
+  { Escolha efetiva, já normalizada (filas separadas pela barra vertical), e a gravada nesta estação. }
+  ValorImpressoras: String;
+  ValorImpressoraPadrao: String;
+  ImpressorasJaGravadas: String;
+  PadraoJaGravada: String;
+
+{ Índice da fila na lista, sem diferenciar maiúsculas (como o spooler); -1 quando ausente. }
+function IndiceDaImpressora(Lista: TArrayOfString; Nome: String): Integer;
+var
+  i: Integer;
+begin
+  Result := -1;
+
+  for i := 0 to GetArrayLength(Lista) - 1 do
+    if CompareText(Lista[i], Nome) = 0 then
+    begin
+      Result := i;
+      Exit;
+    end;
+end;
+
+procedure AcrescentarImpressora(var Lista: TArrayOfString; Nome: String);
+var
+  N: Integer;
+begin
+  N := GetArrayLength(Lista);
+  SetArrayLength(Lista, N + 1);
+  Lista[N] := Nome;
+end;
+
+{ Divide o texto da variável nas filas, já aparadas e sem vazio nem repetição. }
+procedure DividirImpressoras(Texto: String; var Lista: TArrayOfString);
+var
+  i: Integer;
+  Atual: String;
+  C: Char;
+begin
+  SetArrayLength(Lista, 0);
+  Atual := '';
+
+  for i := 1 to Length(Texto) + 1 do
+  begin
+    if i <= Length(Texto) then
+      C := Texto[i]
+    else
+      C := SeparadorImpressoras;
+
+    if C = SeparadorImpressoras then
+    begin
+      Atual := Trim(Atual);
+      if (Atual <> '') and (IndiceDaImpressora(Lista, Atual) < 0) then
+        AcrescentarImpressora(Lista, Atual);
+      Atual := '';
+    end
+    else
+      Atual := Atual + C;
+  end;
+end;
+
+function JuntarImpressoras(Lista: TArrayOfString; Separador: String): String;
+var
+  i: Integer;
+begin
+  Result := '';
+
+  for i := 0 to GetArrayLength(Lista) - 1 do
+  begin
+    if Result <> '' then
+      Result := Result + Separador;
+    Result := Result + Lista[i];
+  end;
+end;
+
+{ Espelha SelecaoImpressorasEstacao.Criar: a padrão fora da lista seria ignorada pelo servidor, e a
+  estação ficaria sem impressora com o técnico achando que escolheu uma. }
+procedure NormalizarSelecaoDeImpressoras(Habilitadas, Padrao: String; var HabilitadasNormalizadas: String;
+  var PadraoNormalizada: String);
+var
+  Lista: TArrayOfString;
+  i, Indice: Integer;
+begin
+  DividirImpressoras(Habilitadas, Lista);
+  PadraoNormalizada := Trim(Padrao);
+
+  if PadraoNormalizada <> '' then
+  begin
+    Indice := IndiceDaImpressora(Lista, PadraoNormalizada);
+
+    if Indice >= 0 then
+      { A grafia da lista: é a que o técnico viu marcada. }
+      PadraoNormalizada := Lista[Indice]
+    else
+    begin
+      SetArrayLength(Lista, GetArrayLength(Lista) + 1);
+      for i := GetArrayLength(Lista) - 1 downto 1 do
+        Lista[i] := Lista[i - 1];
+      Lista[0] := PadraoNormalizada;
+    end;
+  end;
+
+  HabilitadasNormalizadas := JuntarImpressoras(Lista, SeparadorImpressoras);
+end;
+
+{ Filas do spooler pela MESMA fonte do inventário (WmiPrinterInventoryCollector: Win32_Printer, campo
+  Name): o nome marcado aqui precisa ser o NomeSistema que o Helper manda. Lida uma vez; falha não impede
+  a instalação — a página mostra só as já escolhidas e diz por quê. }
+procedure LerFilasDoSpooler();
+var
+  Localizador, Servico, Resultado, Item: Variant;
+  i: Integer;
+  Nome: String;
+begin
+  if SpoolerLido then
+    Exit;
+
+  SpoolerLido := True;
+  ErroDoSpooler := '';
+  SetArrayLength(FilasDoSpooler, 0);
+
+  try
+    Localizador := CreateOleObject('WbemScripting.SWbemLocator');
+    Servico := Localizador.ConnectServer('.', 'root\CIMV2');
+    Resultado := Servico.ExecQuery('SELECT Name FROM Win32_Printer');
+
+    for i := 0 to Resultado.Count - 1 do
+    begin
+      Item := Resultado.ItemIndex(i);
+      Nome := Item.Name;
+      Nome := Trim(Nome);
+
+      if (Nome <> '') and (IndiceDaImpressora(FilasDoSpooler, Nome) < 0) then
+        AcrescentarImpressora(FilasDoSpooler, Nome);
+    end;
+
+    Log('[PrintMonitor] Impressoras do Windows: ' + IntToStr(GetArrayLength(FilasDoSpooler)) + ' fila(s).');
+  except
+    ErroDoSpooler := GetExceptionMessage();
+    Log('[PrintMonitor] AVISO: não foi possível ler as impressoras do Windows (Win32_Printer): ' + ErroDoSpooler);
+  end;
+end;
+
+{ Valores iniciais da escolha, com a precedência do Setup.exe (SetupParameters.Parse, chave a chave):
+  /CONFIGFILE → parâmetro. Nenhuma das duas informada → a gravada nesta estação. }
+procedure ValoresIniciaisDasImpressoras(Arquivo: String);
+var
+  Habilitadas, Padrao: String;
+begin
+  NormalizarSelecaoDeImpressoras(VariavelDeMaquina(VarImpressorasHabilitadas), VariavelDeMaquina(VarImpressoraPadrao),
+    ImpressorasJaGravadas, PadraoJaGravada);
+
+  Habilitadas := LerDoArquivoDeConfiguracao(Arquivo, 'ImpressorasHabilitadas');
+  if Habilitadas = '' then
+    Habilitadas := Parametro('IMPRESSORAS', '');
+
+  Padrao := LerDoArquivoDeConfiguracao(Arquivo, 'ImpressoraPadrao');
+  if Padrao = '' then
+    Padrao := Parametro('IMPRESSORAPADRAO', '');
+
+  if (Trim(Habilitadas) = '') and (Trim(Padrao) = '') then
+  begin
+    Habilitadas := ImpressorasJaGravadas;
+    Padrao := PadraoJaGravada;
+  end;
+
+  NormalizarSelecaoDeImpressoras(Habilitadas, Padrao, ValorImpressoras, ValorImpressoraPadrao);
+end;
+
+{ A escolha efetiva difere da gravada — só então ela vai ao Setup.exe (mesma regra das origens). }
+function SelecaoDeImpressorasMudou(): Boolean;
+begin
+  Result := (ValorImpressoras <> '') and
+            ((ValorImpressoras <> ImpressorasJaGravadas) or (ValorImpressoraPadrao <> PadraoJaGravada));
+end;
+
+function ImpressorasHabilitadasInformadas(): String;
+begin
+  if ValorImpressoras = '' then
+    Result := '(nenhuma — o servidor só aceita os modelos homologados; escolha depois em "Configurar PrintMonitor")'
+  else
+  begin
+    Result := ValorImpressoras;
+    StringChangeEx(Result, SeparadorImpressoras, ', ', True);
+
+    if not SelecaoDeImpressorasMudou() then
+      Result := Result + ' (já gravadas nesta estação)';
+  end;
+end;
+
+function ImpressoraPadraoInformada(): String;
+begin
+  if ValorImpressoraPadrao <> '' then
+    Result := ValorImpressoraPadrao
+  else
+    Result := SemImpressoraPadrao;
+end;
+
+{ Log da escolha (o silencioso não tem página): a fila informada que o spooler não tem NÃO bloqueia — o
+  driver pode ser instalado depois, e o --config-ui também a aceita sinalizada. }
+procedure RegistrarSelecaoDeImpressorasNoLog();
+var
+  Lista: TArrayOfString;
+  i: Integer;
+begin
+  if ValorImpressoras = '' then
+  begin
+    Log('[PrintMonitor] AVISO: nenhuma impressora escolhida para a estação (ImpressorasHabilitadas); o servidor ' +
+        'só aceitará os modelos homologados. Escolha depois em "Configurar PrintMonitor".');
+    Exit;
+  end;
+
+  Log('[PrintMonitor] Impressoras da estação: ' + ImpressorasHabilitadasInformadas() + ' — padrão: ' +
+      ImpressoraPadraoInformada());
+
+  LerFilasDoSpooler();
+  if ErroDoSpooler <> '' then
+    Exit;
+
+  DividirImpressoras(ValorImpressoras, Lista);
+  for i := 0 to GetArrayLength(Lista) - 1 do
+    if IndiceDaImpressora(FilasDoSpooler, Lista[i]) < 0 then
+      Log('[PrintMonitor] AVISO: a impressora "' + Lista[i] + '" foi escolhida, mas o Windows não tem essa fila ' +
+          '(driver não instalado ou nome diferente). Ela fica habilitada e aparece sinalizada no "Configurar".');
+end;
+
+{ Restringe a padrão às impressoras marcadas, preservando a escolhida enquanto ela continuar marcada
+  (o mesmo do AtualizarPadraoPossiveis do --config-ui). }
+procedure AtualizarImpressoraPadraoPossiveis(Sender: TObject);
+var
+  Atual: String;
+  i: Integer;
+begin
+  Atual := '';
+  if ComboImpressoraPadrao.ItemIndex > 0 then
+    Atual := ComboImpressoraPadrao.Items[ComboImpressoraPadrao.ItemIndex];
+
+  ComboImpressoraPadrao.Items.Clear();
+  ComboImpressoraPadrao.Items.Add(SemImpressoraPadrao);
+
+  for i := 0 to ListaImpressoras.Items.Count - 1 do
+    if ListaImpressoras.Checked[i] then
+      ComboImpressoraPadrao.Items.Add(NomesDasOpcoesDeImpressora[i]);
+
+  ComboImpressoraPadrao.ItemIndex := 0;
+  for i := 1 to ComboImpressoraPadrao.Items.Count - 1 do
+    if (Atual <> '') and (CompareText(ComboImpressoraPadrao.Items[i], Atual) = 0) then
+      ComboImpressoraPadrao.ItemIndex := i;
+end;
+
+{ Linhas da lista: as filas do spooler, marcadas conforme a escolha, seguidas das escolhidas que o spooler
+  não tem (marcadas e sinalizadas, em vez de sumirem em silêncio) — SelecaoImpressorasEstacao.MontarOpcoes. }
+procedure PreencherListaDeImpressoras();
+var
+  Selecao: TArrayOfString;
+  i: Integer;
+begin
+  LerFilasDoSpooler();
+  DividirImpressoras(ValorImpressoras, Selecao);
+  SetArrayLength(NomesDasOpcoesDeImpressora, 0);
+  ListaImpressoras.Items.Clear();
+
+  for i := 0 to GetArrayLength(FilasDoSpooler) - 1 do
+  begin
+    AcrescentarImpressora(NomesDasOpcoesDeImpressora, FilasDoSpooler[i]);
+    ListaImpressoras.AddCheckBox(FilasDoSpooler[i], '', 0, IndiceDaImpressora(Selecao, FilasDoSpooler[i]) >= 0,
+      True, False, False, nil);
+  end;
+
+  for i := 0 to GetArrayLength(Selecao) - 1 do
+    if IndiceDaImpressora(FilasDoSpooler, Selecao[i]) < 0 then
+    begin
+      AcrescentarImpressora(NomesDasOpcoesDeImpressora, Selecao[i]);
+      ListaImpressoras.AddCheckBox(Selecao[i] + SufixoImpressoraAusente, '', 0, True, True, False, False, nil);
+    end;
+
+  AtualizarImpressoraPadraoPossiveis(nil);
+  for i := 1 to ComboImpressoraPadrao.Items.Count - 1 do
+    if CompareText(ComboImpressoraPadrao.Items[i], ValorImpressoraPadrao) = 0 then
+      ComboImpressoraPadrao.ItemIndex := i;
+
+  if ErroDoSpooler <> '' then
+    RotuloImpressoras.Caption := 'Não foi possível ler as impressoras do Windows: ' + ErroDoSpooler +
+                                 ' Escolha depois em "Configurar PrintMonitor…" (bandeja).'
+  else if GetArrayLength(FilasDoSpooler) = 0 then
+    RotuloImpressoras.Caption := 'Nenhuma impressora instalada no Windows. Instale o driver do modelo e escolha ' +
+                                 'depois em "Configurar PrintMonitor…" (bandeja ou menu Iniciar).'
+  else
+    RotuloImpressoras.Caption := 'Para trocar depois, sem reinstalar: "Configurar PrintMonitor…" na bandeja ' +
+                                 'ou no menu Iniciar.';
+end;
+
+procedure CriarPaginaDeImpressoras(AfterID: Integer);
+var
+  Explicacao, RotuloPadrao: TNewStaticText;
+begin
+  PaginaImpressoras := CreateCustomPage(
+    AfterID,
+    'Impressoras desta estação',
+    'Quais impressoras o PrintMonitor vai usar');
+
+  Explicacao := TNewStaticText.Create(PaginaImpressoras);
+  Explicacao.Parent := PaginaImpressoras.Surface;
+  Explicacao.Left := 0;
+  Explicacao.Top := 0;
+  Explicacao.Width := PaginaImpressoras.SurfaceWidth;
+  Explicacao.Height := ScaleY(40);
+  Explicacao.AutoSize := False;
+  Explicacao.WordWrap := True;
+  Explicacao.Caption := 'Marque as impressoras que esta estação usa. Só as marcadas, de qualquer modelo, chegam ' +
+                        'ao servidor para serem liberadas na gestão de impressoras; a padrão passa a ser a da ' +
+                        'estação ao ser liberada.';
+
+  ListaImpressoras := TNewCheckListBox.Create(PaginaImpressoras);
+  ListaImpressoras.Parent := PaginaImpressoras.Surface;
+  ListaImpressoras.Left := 0;
+  ListaImpressoras.Top := Explicacao.Top + Explicacao.Height + ScaleY(4);
+  ListaImpressoras.Width := PaginaImpressoras.SurfaceWidth;
+  ListaImpressoras.Height := ScaleY(100);
+  ListaImpressoras.OnClickCheck := @AtualizarImpressoraPadraoPossiveis;
+
+  RotuloPadrao := TNewStaticText.Create(PaginaImpressoras);
+  RotuloPadrao.Parent := PaginaImpressoras.Surface;
+  RotuloPadrao.Left := 0;
+  RotuloPadrao.Top := ListaImpressoras.Top + ListaImpressoras.Height + ScaleY(8);
+  RotuloPadrao.Caption := 'Impressora padrão da estação (entre as marcadas):';
+
+  ComboImpressoraPadrao := TNewComboBox.Create(PaginaImpressoras);
+  ComboImpressoraPadrao.Parent := PaginaImpressoras.Surface;
+  ComboImpressoraPadrao.Style := csDropDownList;
+  ComboImpressoraPadrao.Left := 0;
+  ComboImpressoraPadrao.Top := RotuloPadrao.Top + RotuloPadrao.Height + ScaleY(4);
+  ComboImpressoraPadrao.Width := PaginaImpressoras.SurfaceWidth;
+
+  RotuloImpressoras := TNewStaticText.Create(PaginaImpressoras);
+  RotuloImpressoras.Parent := PaginaImpressoras.Surface;
+  RotuloImpressoras.Left := 0;
+  RotuloImpressoras.Top := ComboImpressoraPadrao.Top + ComboImpressoraPadrao.Height + ScaleY(8);
+  RotuloImpressoras.Width := PaginaImpressoras.SurfaceWidth;
+  RotuloImpressoras.Height := ScaleY(32);
+  RotuloImpressoras.AutoSize := False;
+  RotuloImpressoras.WordWrap := True;
+
+  PreencherListaDeImpressoras();
+end;
+
+{ Avançar da página: nenhuma marcada MANTÉM a escolha gravada (o Setup.exe não recebe "nenhuma") — o
+  técnico confirma ciente, e o aviso aponta o caminho para retirar. }
+function ValidarPaginaDeImpressoras(): Boolean;
+var
+  Marcadas, Padrao, Habilitadas, PadraoNormalizada, Mensagem: String;
+  i: Integer;
+begin
+  Result := True;
+  Marcadas := '';
+
+  for i := 0 to ListaImpressoras.Items.Count - 1 do
+    if ListaImpressoras.Checked[i] then
+      Marcadas := Marcadas + NomesDasOpcoesDeImpressora[i] + SeparadorImpressoras;
+
+  Padrao := '';
+  if ComboImpressoraPadrao.ItemIndex > 0 then
+    Padrao := ComboImpressoraPadrao.Items[ComboImpressoraPadrao.ItemIndex];
+
+  NormalizarSelecaoDeImpressoras(Marcadas, Padrao, Habilitadas, PadraoNormalizada);
+
+  if Habilitadas = '' then
+  begin
+    if ImpressorasJaGravadas <> '' then
+    begin
+      Mensagem := ImpressorasJaGravadas;
+      StringChangeEx(Mensagem, SeparadorImpressoras, ', ', True);
+      Mensagem := 'Nenhuma impressora marcada. A escolha já gravada nesta estação (' + Mensagem + ') será ' +
+                  'MANTIDA: o instalador não retira impressoras.' + #13#10#13#10 +
+                  'Para retirá-las, use "Configurar PrintMonitor…" na bandeja depois da instalação. Continuar?';
+    end
+    else
+      Mensagem := 'Nenhuma impressora marcada. Sem escolha, o servidor só aceita os modelos homologados — uma ' +
+                  'impressora de outro modelo não chega à gestão de impressoras.' + #13#10#13#10 +
+                  'Você pode escolher depois em "Configurar PrintMonitor…" na bandeja. Continuar sem impressora?';
+
+    if MsgBox(Mensagem, mbConfirmation, MB_YESNO) <> IDYES then
+    begin
+      Result := False;
+      Exit;
+    end;
+
+    Habilitadas := ImpressorasJaGravadas;
+    PadraoNormalizada := PadraoJaGravada;
+  end;
+
+  ValorImpressoras := Habilitadas;
+  ValorImpressoraPadrao := PadraoNormalizada;
+  Log('[PrintMonitor] Impressoras escolhidas na página: ' + ImpressorasHabilitadasInformadas() + ' — padrão: ' +
+      ImpressoraPadraoInformada());
+end;
+
 { Resolve os valores iniciais a partir do arquivo de resposta e dos parâmetros da linha de comando.
   A ordem de precedência é: /CONFIGFILE → parâmetro explícito → default do épico. }
 procedure ValoresIniciais();
@@ -344,6 +773,8 @@ begin
   ValorSegredoIdentidade := LerDoArquivoDeConfiguracao(Arquivo, 'LoopbackPrintSegredoIdentidade');
   ValorRouteSecret := LerDoArquivoDeConfiguracao(Arquivo, 'LoopbackPrintRouteSecret');
   ValorLoopbackEnabled := LerDoArquivoDeConfiguracao(Arquivo, 'LoopbackPrintEnabled');
+
+  ValoresIniciaisDasImpressoras(Arquivo);
 end;
 
 { Mascara a chave para o resumo: nunca em claro na tela, nem no log. }
@@ -589,6 +1020,8 @@ begin
   PaginaIdentidade.Add('Origens do front-adm (separadas por vírgula):', False);
   PaginaIdentidade.Values[0] := ValorOrigens;
 
+  CriarPaginaDeImpressoras(PaginaIdentidade.ID);
+
   { Sem página de opções desde PRD-PMTRAY-02: o checkbox da atualização automática era o único conteúdo
     dela, e a atualização passou a ser sempre ligada. }
 end;
@@ -645,6 +1078,9 @@ begin
 
     PaginaIdentidade.Values[0] := ValorOrigens;
   end;
+
+  if (PaginaImpressoras <> nil) and (CurPageID = PaginaImpressoras.ID) then
+    Result := ValidarPaginaDeImpressoras();
 end;
 
 { Equivalente silencioso da validação da tela 4: em /VERYSILENT nenhuma página customizada roda.
@@ -697,4 +1133,7 @@ begin
         'pelo navegador fica desligada e a tela de impressoras mostrará esta máquina como não identificada.')
   else
     Log('[PrintMonitor] Origens do front-adm para a identificação pelo navegador: ' + ValorOrigens);
+
+  { Mesma escolha da página "Impressoras desta estação": no silencioso ela não roda. Nada aqui bloqueia. }
+  RegistrarSelecaoDeImpressorasNoLog();
 end;

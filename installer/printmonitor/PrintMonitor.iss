@@ -17,6 +17,15 @@
 ;                         técnico escolhe a impressora no `Setup.exe --config-ui` e instala o driver do
 ;                         modelo por fora. Upgrade não remove o driver que a estação já tem (desinstalador
 ;                         próprio; serve à impressora, não ao agente).
+;
+;  Impressoras da estação (PRD-PMSEL-INST-02) — página "Impressoras desta estação" no interativo; no
+;  silencioso, por parâmetro ou pelas mesmas chaves no /CONFIGFILE (ImpressorasHabilitadas, ImpressoraPadrao):
+;    /IMPRESSORAS="Fila A|Fila B"  — filas do spooler habilitadas, separadas pela barra vertical (entre ASPAS:
+;                                    sem elas o cmd lê a barra como pipe)
+;    /IMPRESSORAPADRAO="Fila A"    — a padrão da estação; entra também nas habilitadas
+;  Precedência chave a chave: /CONFIGFILE → parâmetro; nenhuma das duas → a escolha gravada na estação.
+;  Informada, a escolha SUBSTITUI a gravada (como o Setup.exe). Não há como retirar todas pelo instalador:
+;  é o "Configurar PrintMonitor" (bandeja), que também troca a escolha depois sem reinstalar.
 ; ============================================================================================
 
 #ifndef AppVersion
@@ -286,7 +295,8 @@ begin
   if CurPageID = wpFinished then
     WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
       'Resumo do provisionamento (etapa a etapa):' + #13#10 + LogDoProvisionamento() + #13#10#13#10 +
-      'Para trocar o endereço da API depois, use o atalho "Configurar PrintMonitor" no menu Iniciar.' +
+      'Para trocar o endereço da API ou as impressoras depois, use "Configurar PrintMonitor" na bandeja ' +
+      'ou no menu Iniciar.' +
       ResumoProcessosDaSessao() + ResumoAvisoProvisionamento();
 end;
 
@@ -307,7 +317,10 @@ begin
             Space + 'Atualização automática: ' + AutoUpdateInformado() + NewLine + NewLine +
             'Identificação pelo navegador (front-adm):' + NewLine +
             Space + 'Origens permitidas: ' + OrigensInformadas() + NewLine +
-            Space + 'Endereço consultado pelo admin: http://127.0.0.1:8183/identidade' + NewLine;
+            Space + 'Endereço consultado pelo admin: http://127.0.0.1:8183/identidade' + NewLine + NewLine +
+            'Impressoras desta estação:' + NewLine +
+            Space + 'Habilitadas: ' + ImpressorasHabilitadasInformadas() + NewLine +
+            Space + 'Padrão: ' + ImpressoraPadraoInformada() + NewLine;
 
   { Mesmo bloco do TEF, com a política do PrintMonitor: atualiza NO LUGAR, sem desinstalar. }
   if InstalacaoAnteriorPresente() then

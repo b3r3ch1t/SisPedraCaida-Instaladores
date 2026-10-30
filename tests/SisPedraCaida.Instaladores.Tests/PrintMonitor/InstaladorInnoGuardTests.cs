@@ -3,6 +3,7 @@ using Moq;
 using SisPedraCaida.Domain.Interfaces;
 using SisPedraCaida.PrintMonitor.Core.Abstractions;
 using SisPedraCaida.PrintMonitor.Core.Constants;
+using SisPedraCaida.PrintMonitor.Core.Inventory;
 using SisPedraCaida.PrintMonitor.Core.Options;
 using SisPedraCaida.PrintMonitor.Core.Provisioning;
 using SisPedraCaida.PrintMonitor.Infrastructure.Provisioning;
@@ -64,7 +65,7 @@ public class InstaladorInnoGuardTests
 
         Assert.Equal(
             ["ApiKey", "LoopbackPrintEnabled", "LoopbackPrintRouteSecret", "LoopbackPrintSegredoIdentidade",
-             "LoopbackPrintOrigensPermitidas"],
+             "LoopbackPrintOrigensPermitidas", "ImpressorasHabilitadas", "ImpressoraPadrao"],
             chaves);
 
         var arquivo = Path.Combine(Path.GetTempPath(), $"pm-guard-{Guid.NewGuid():N}.txt");
@@ -74,6 +75,7 @@ public class InstaladorInnoGuardTests
             [
                 "ApiKey=chave", "LoopbackPrintEnabled=true", "LoopbackPrintRouteSecret=impressao-0123456789",
                 "LoopbackPrintSegredoIdentidade=identidade-0123456789", "LoopbackPrintOrigensPermitidas=https://a.exemplo.com",
+                "ImpressorasHabilitadas=Fila A|Fila B", "ImpressoraPadrao=Fila B",
             ]);
 
             var p = SetupParameters.Parse(["--config-file", arquivo]);
@@ -83,6 +85,8 @@ public class InstaladorInnoGuardTests
             Assert.Equal("impressao-0123456789", p.LoopbackRouteSecret);
             Assert.Equal("identidade-0123456789", p.LoopbackSegredoIdentidade);
             Assert.Equal(["https://a.exemplo.com"], p.LoopbackOrigensPermitidas);
+            Assert.Equal(["Fila A", "Fila B"], p.SelecaoImpressoras!.Habilitadas);
+            Assert.Equal("Fila B", p.SelecaoImpressoras.Padrao);
         }
         finally
         {
@@ -106,6 +110,74 @@ public class InstaladorInnoGuardTests
             StringComparison.Ordinal);
         Assert.Contains($"TamanhoMinimoSegredoLoopback = {SetupParameters.TamanhoMinimoSegredo};", pages,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ConstantesDasImpressoras_NoIss_SaoAsMesmasDoAgente()
+    {
+        // PRD-PMSEL-INST-02: o .iss relê a escolha gravada nessas variáveis (pré-marca a página e decide se reenvia) e
+        // monta a lista como SelecaoImpressorasEstacao.MontarOpcoes. Nome divergente = upgrade que "esquece" a escolha.
+        var pages = Ler("pages.iss");
+
+        Assert.Contains($"VarImpressorasHabilitadas = '{StationEnvironmentVariables.ImpressorasHabilitadas}';", pages,
+            StringComparison.Ordinal);
+        Assert.Contains($"VarImpressoraPadrao = '{StationEnvironmentVariables.ImpressoraPadrao}';", pages,
+            StringComparison.Ordinal);
+        Assert.Contains($"SeparadorImpressoras = '{SelecaoImpressorasEstacao.Separador}';", pages, StringComparison.Ordinal);
+
+        var sufixo = Regex.Match(pages, @"SufixoImpressoraAusente = '(?<sufixo>[^']*)';");
+        Assert.True(sufixo.Success, "Constante SufixoImpressoraAusente não encontrada em pages.iss.");
+        Assert.Equal(new OpcaoImpressoraEstacao("Fila", true, false, NoSpooler: false).Rotulo, "Fila" + sufixo.Groups["sufixo"].Value);
+    }
+
+    [Fact]
+    public void ImpressorasIniciais_NoIss_SeguemArquivoParametroChaveAChave_EDepoisAGravada()
+    {
+        // Mesma precedência do SetupParameters.Parse (DoArquivoOuParametro, chave a chave); só sem as duas a gravada.
+        var pages = Ler("pages.iss");
+
+        var ordem = Regex.Match(
+            pages,
+            @"Habilitadas := LerDoArquivoDeConfiguracao\(Arquivo, 'ImpressorasHabilitadas'\);\s*" +
+            @"if Habilitadas = '' then\s*Habilitadas := Parametro\('IMPRESSORAS', ''\);\s*" +
+            @"Padrao := LerDoArquivoDeConfiguracao\(Arquivo, 'ImpressoraPadrao'\);\s*" +
+            @"if Padrao = '' then\s*Padrao := Parametro\('IMPRESSORAPADRAO', ''\);\s*" +
+            @"if \(Trim\(Habilitadas\) = ''\) and \(Trim\(Padrao\) = ''\) then\s*begin\s*" +
+            @"Habilitadas := ImpressorasJaGravadas;\s*Padrao := PadraoJaGravada;");
+        Assert.True(ordem.Success, "Precedência das impressoras iniciais divergente em ValoresIniciaisDasImpressoras (pages.iss).");
+
+        // A lista vem da mesma fonte do inventário (WmiPrinterInventoryCollector), senão o nome marcado não casa com o
+        // NomeSistema que o Helper manda.
+        Assert.Contains("FROM Win32_Printer", pages, StringComparison.Ordinal);
+        Assert.Contains("Nome := Item.Name;", pages, StringComparison.Ordinal);
+        Assert.Contains("ValoresIniciaisDasImpressoras(Arquivo);", pages, StringComparison.Ordinal);
+        Assert.Contains("CriarPaginaDeImpressoras(PaginaIdentidade.ID);", pages, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SelecaoSemPadraoGravadaPeloIss_LimpaAPadraoAnteriorNaEstacao()
+    {
+        // O .iss só escreve ImpressoraPadrao= quando há padrão. Com as habilitadas informadas, o Setup.exe precisa gravar
+        // a padrão VAZIA — senão a padrão de uma escolha anterior sobreviveria à troca feita no instalador.
+        var arquivo = Path.Combine(Path.GetTempPath(), $"pm-guard-{Guid.NewGuid():N}.txt");
+        try
+        {
+            File.WriteAllLines(arquivo, ["ImpressorasHabilitadas=Impressão Cozinha|Bar"]);
+
+            var variaveis = SetupParameters.Parse(["--all", "--config-file", arquivo]).ToEnvironmentVariables();
+
+            Assert.Equal("Impressão Cozinha|Bar", variaveis[StationEnvironmentVariables.ImpressorasHabilitadas]);
+            Assert.Equal(string.Empty, variaveis[StationEnvironmentVariables.ImpressoraPadrao]);
+        }
+        finally
+        {
+            File.Delete(arquivo);
+        }
+
+        // E sem nenhuma das duas chaves o Setup.exe preserva a gravada: é por isso que o .iss não oferece "nenhuma".
+        Assert.False(SetupParameters.Parse(["--all"]).ToEnvironmentVariables()
+            .ContainsKey(StationEnvironmentVariables.ImpressorasHabilitadas));
+        Assert.Contains("if SelecaoDeImpressorasMudou() then", Ler("provisioning.iss"), StringComparison.Ordinal);
     }
 
     /// <summary>Origem padrão do admin que o instalador traz (decisão de 21/10/2026).</summary>
