@@ -1,6 +1,7 @@
 # SisPedraCaida-Instaladores — Guia
 
-> **Última atualização deste CLAUDE.md:** 30/10/2026 07:45 (horário local, UTC-3) — os instaladores da **`dev` têm a
+> **Última atualização deste CLAUDE.md:** 30/10/2026 13:30 (horário local, UTC-3) — o empacotamento da **`dev`**
+> é **só manual** (sem `push`, aqui e no backend) · antes (30/10/2026 07:45): os instaladores da **`dev` têm a
 > versão da API** (armadilha **v**): o backend dispara com `-f versao` e, sem `sha`, a `dev` empacota o último commit
 > construído · antes (29/10/2026 17:30): o `PrintMonitorSetup` **não traz
 > mais o driver da Bematech** (PRD-PMSEL-INST-01, épico `printmonitor-selecao-impressora`): sai o payload, o
@@ -111,7 +112,7 @@ Contrato completo dos scripts e diagnóstico por mensagem de erro:
 | Workflow | Gatilho | O que faz |
 |---|---|---|
 | [`instaladores-windows.yml`](.github/workflows/instaladores-windows.yml) | `workflow_dispatch` (o backend dispara) e `workflow_call` | `matriz` (ubuntu: clona o backend no `sha`, resolve a versão — informada, da tag, na `dev` o `VersionPrefix` do commit, na `prod` o manifest —, filtra a matriz) → `testar` (Windows: Pester + guardas contra o backend naquele SHA) → `empacotar` (Windows, um worktree por serviço, `fail-fast: false`) → `publicar` (ubuntu: confere `.sha256`, publica **aqui**) |
-| [`instaladores-dev.yml`](.github/workflows/instaladores-dev.yml) | push na `dev` deste repo em `installer/**`, `tests/**` ou nos dois workflows | chama o anterior com `canal=dev`, último commit **construído** da `dev` do backend (armadilha **v**) |
+| [`instaladores-dev.yml`](.github/workflows/instaladores-dev.yml) | **só manual** (`workflow_dispatch`) desde 30/10/2026; antes, push na `dev` em `installer/**`, `tests/**` ou nos workflows | chama o anterior com `canal=dev`, último commit **construído** da `dev` do backend (armadilha **v**) |
 | [`runner-windows-diagnostico.yml`](.github/workflows/runner-windows-diagnostico.yml) | manual | `runner-windows-diagnostico.ps1 -ExigirPayload` + Pester, como a conta do serviço do runner |
 | [`ci.yml`](.github/workflows/ci.yml) | PR para `dev`/`prod` | Pester + guardas (`windows-latest`, backend `dev` ou `prod` conforme a base) |
 | [`commitlint.yml`](.github/workflows/commitlint.yml) | PR para `dev`/`prod` | commits e título em Conventional Commits ([`commitlint.config.mjs`](commitlint.config.mjs), header ≤ 100) |
@@ -121,7 +122,7 @@ Contrato completo dos scripts e diagnóstico por mensagem de erro:
 | Evento no backend | Workflow de lá | Chamada aqui |
 |---|---|---|
 | push na `prod` (com ou sem release) | `release-please-prod.yml`, job `instaladores` | `--ref prod -f canal=prod -f sha -f versao -f tag` |
-| push na `dev` que muda a versão da API ou os agentes (passo `decidir`) | `instaladores-dev.yml` | `--ref dev -f canal=dev -f sha -f versao` |
+| dispatch **manual** do `instaladores-dev.yml` (desde 30/10/2026; antes, push na `dev`) | `instaladores-dev.yml` | `--ref dev -f canal=dev -f sha -f versao` |
 
 **Publicação (neste repositório):** `prod` → release `prod-vX.Y.Z` (mesma tag da release do backend,
 criada aqui com `--target` no commit dos scripts se não existir) com `.exe` + `.sha256` e a tabela de
