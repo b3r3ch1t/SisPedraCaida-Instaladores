@@ -1,24 +1,14 @@
 name: Instaladores Windows (dev)
 
-# Todo commit na `dev` DESTE repositório que toque um instalador regera TefAgentSetup, PrintMonitorSetup
-# e TotemSetup a partir do HEAD da `dev` do backend (PRD-INSTDEV-02).
+# Regera TefAgentSetup, PrintMonitorSetup e TotemSetup a partir da `dev` do backend (PRD-INSTDEV-02).
 #
-# O outro gatilho da dev — commit do BACKEND que toque os agentes — não passa por aqui: o
-# `instaladores-dev.yml` do backend dispara o `instaladores-windows.yml` deste repositório direto, por
+# SOMENTE MANUAL DESDE 30/10/2026: o push na `dev` não empacota mais (nem aqui nem no backend, junto com
+# o publish das imagens da `dev`). Rodar pela aba Actions ou `gh workflow run instaladores-dev.yml --ref dev`.
+#
+# O disparo manual do lado do backend — `instaladores-dev.yml` de lá — não passa por aqui: ele chama o
+# `instaladores-windows.yml` deste repositório direto, por
 # `gh workflow run --ref dev -f canal=dev -f sha=<sha do backend>`.
-#
-# GATILHO POR `paths` (D4): o runner `[self-hosted, windows, instaladores]` é ÚNICO e executa um job
-# por vez; README, PRD ou doc não alteram pacote nenhum.
 on:
-  push:
-    branches: [dev]
-    paths:
-      # .iss, includes, build-installer.ps1, manifesto da matriz e o módulo de empacotamento.
-      - 'installer/**'
-      # As guardas .iss × backend rodam antes de empacotar: mudança nelas precisa provar que segue verde.
-      - 'tests/**'
-      - '.github/workflows/instaladores-dev.yml'
-      - '.github/workflows/instaladores-windows.yml'
   workflow_dispatch:
     inputs:
       sha:

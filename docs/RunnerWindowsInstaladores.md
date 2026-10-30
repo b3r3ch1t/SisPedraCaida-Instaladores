@@ -175,8 +175,8 @@ E a variável **`TOTEM_WEBVIEW2_PAYLOAD_DIR`** = `C:\ci-cache\totem-webview2`. O
 [`README.md` da pasta](../installer/totem/payload-webview2/README.md).
 
 ⚠️ **Crie o cache e a variável antes de mesclar na `dev`** qualquer mudança que torne o payload obrigatório
-(foi o caso do PRD-TOTEMINST-02): o push dispara o `instaladores-dev.yml`, e sem a variável o job do totem
-reprova. Os outros serviços seguem empacotando (`fail-fast: false`).
+(foi o caso do PRD-TOTEMINST-02): o próximo `instaladores-dev.yml` (manual desde 30/10/2026) reprova o job
+do totem sem a variável. Os outros serviços seguem empacotando (`fail-fast: false`).
 
 ## 6. Diagnosticar e ligar
 
@@ -245,8 +245,8 @@ reprova — e, como os dois ficam atrás de `INSTALADORES_WINDOWS`, nenhum roda 
 | Evento | Workflow | Chamada |
 |---|---|---|
 | Push na `prod` do backend (com ou sem release) | backend: `release-please-prod.yml`, job `instaladores` | `gh workflow run instaladores-windows.yml --ref prod -f canal=prod -f sha -f versao -f tag` |
-| Push na `dev` do backend que muda a versão da API ou os agentes | backend: `instaladores-dev.yml` (passo `decidir` lá, mesmo gatilho do publish da `dev`) | `gh workflow run instaladores-windows.yml --ref dev -f canal=dev -f sha -f versao` |
-| Push na `dev` deste repositório que toque `installer/`, `tests/` ou os workflows | daqui: `instaladores-dev.yml` | `workflow_call`, HEAD da `dev` do backend |
+| Dispatch **manual** na `dev` do backend (desde 30/10/2026; antes, push na `dev`) | backend: `instaladores-dev.yml` | `gh workflow run instaladores-windows.yml --ref dev -f canal=dev -f sha -f versao` |
+| Dispatch **manual** daqui (desde 30/10/2026; antes, push na `dev` em `installer/`, `tests/` ou nos workflows) | daqui: `instaladores-dev.yml` | `workflow_call`, HEAD da `dev` do backend |
 
 O disparo é **fire-and-forget**: o run do backend fica verde ao disparar, e o resultado do empacotamento
 aparece **aqui** (Actions deste repositório e a release `prod-vX.Y.Z` daqui). Isso só reforça a D3 —
