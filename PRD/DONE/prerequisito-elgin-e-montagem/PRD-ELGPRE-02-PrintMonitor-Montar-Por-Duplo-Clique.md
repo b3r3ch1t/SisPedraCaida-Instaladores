@@ -1,6 +1,6 @@
 # PRD-ELGPRE-02 — Partes do PrintMonitor remontadas por duplo clique
 
-> **Status:** Em andamento — **Última atualização:** 30/10/2026 15:50
+> **Status:** Concluído — **Última atualização:** 30/10/2026 16:25
 
 ## Contexto
 
@@ -34,7 +34,7 @@ As partes estão **íntegras**: concatenadas, o zip abre e o `.exe` confere com 
 3. `montar-instalador.ps1`, `build-installer.ps1` do PrintMonitor e `CLAUDE.md`: a receita do `copy /b` sai; entra o
    `.cmd`.
 4. `artifacts/installer/montar-instalador.cmd` versionado ao lado do `PrintMonitorSetup-5.14.0.zip.001/.002`.
-5. Backend: `docs/PrintMonitorInstalador.md` §2.2.1 (mesmo PR de documentação do PRD-ELGPRE-01).
+5. Backend: `docs/PrintMonitorInstalador.md` §2.2.1 — [SisPedraCaida-Backend#1380](https://github.com/b3r3ch1t/SisPedraCaida-Backend/pull/1380).
 
 ## Critérios de aceite
 

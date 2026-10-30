@@ -1,6 +1,6 @@
 # PRD-ELGPRE-01 — Instalador do TEF bloqueia sem o Elgin TEF HUB e o E1_Connect
 
-> **Status:** Em andamento — **Última atualização:** 30/10/2026 15:50
+> **Status:** Concluído — **Última atualização:** 30/10/2026 16:25
 
 ## Contexto
 
@@ -36,7 +36,9 @@ vale para o instalador externo; o que os componentes fazem com a janela deles n�
    chamada no `wpReady`.
 4. Guarda `tests/…/TefAgent/TefAgentPreRequisitosElginGuardTests.cs`: nada de download no `.iss` do TEF, os dois
    AppIds declarados e a checagem no `InitializeSetup`.
-5. Backend: `docs/TefAgentInstalador.md` §1.3 e D7-bis (PR próprio, só documentação).
+5. Backend: `docs/TefAgentInstalador.md` §1.3 e D7-bis — [SisPedraCaida-Backend#1380](https://github.com/b3r3ch1t/SisPedraCaida-Backend/pull/1380), só documentação.
+
+Fora do escopo: o piso **Inno Setup 6.1** (diagnóstico do runner e docs de build) era justificado pelo `CreateDownloadPage`, que saiu; o `TaskDialogMsgBox` precisa só do 6.0. O piso fica — não custa nada — e a justificativa pode ser revista quando alguém mexer no diagnóstico.
 
 ## Critérios de aceite
 
