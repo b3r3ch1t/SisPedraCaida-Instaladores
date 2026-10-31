@@ -1,12 +1,13 @@
 # Gerar os instaladores Windows localmente
 
-> **Última atualização:** 27/10/2026 16:40 (horário local, UTC-3) — WebView2 do totem: opcional no build
-> local, obrigatório no CI (PRD-TOTEMINST-02). Antes (23/10/2026 17:30): instaladores em repositório próprio:
+> **Última atualização:** 31/10/2026 13:28 (horário local, UTC-3) — `MigracaoGalileuSetup` (PRD-MGGINST-01):
+> enquanto a `prod` do backend não tem o migrador, `-Ref origin/dev` explícito. Antes (27/10/2026 16:40): WebView2
+> do totem: opcional no build local, obrigatório no CI (PRD-TOTEMINST-02). Antes (23/10/2026 17:30): instaladores em repositório próprio:
 > os scripts rodam **neste** repositório e pinam o código do agente num clone do backend (`-BackendRoot`,
 > §3). Antes (22/10/2026 16:35): PRD-INSTDEV-04.
 
 Como preparar uma máquina Windows e gerar à mão o `TefAgentSetup-<versão>.exe`, o
-`PrintMonitorSetup-<versão>.exe` e o `TotemSetup-<versão>.exe`.
+`PrintMonitorSetup-<versão>.exe`, o `TotemSetup-<versão>.exe` e o `MigracaoGalileuSetup-<versão>.exe`.
 
 **Este doc é sobre a máquina que GERA o pacote, não sobre a estação que o executa.** Os
 pré-requisitos de quem instala estão, no backend, em [`TefAgentInstalador.md`](https://github.com/b3r3ch1t/SisPedraCaida-Backend/blob/dev/docs/TefAgentInstalador.md) §5.1,
@@ -166,8 +167,14 @@ checagem só avisa): `pwsh installer/totem/build-installer.ps1 -Ref origin/dev -
 [`installer/totem/payload-webview2/README.md`](../installer/totem/payload-webview2/README.md)). **No CI ele é
 obrigatório** desde o PRD-TOTEMINST-02: o pacote de campo sempre o traz.
 
+O **Migrador Galileu** (app WinForms de uso pontual do time técnico, não Windows Service — PRD-MGGINST-01) segue o
+molde do TEF, sem payload: `pwsh installer/migracao-galileu/build-installer.ps1 -Ref origin/dev`. ⚠️ O código dele
+entrou na `dev` do backend em 31/10/2026 (b3r3ch1t/SisPedraCaida-Backend#1396) e **ainda não está na `prod`**: sem
+`-Ref` o script para em "Fonte incompleta" até a promoção do backend. Rodando de um worktree em
+`.worktrees/`, informe `-BackendRoot` e `-WorktreeDir` (o default procura o backend como irmão do checkout).
+
 **Saída:** `artifacts/installer/<Nome>-<versão>.exe` + `<Nome>-<versão>.exe.sha256`, com
-`<Nome>` ∈ { `TefAgentSetup`, `PrintMonitorSetup`, `TotemSetup` }. O hash é a **única prova de
+`<Nome>` ∈ { `TefAgentSetup`, `PrintMonitorSetup`, `TotemSetup`, `MigracaoGalileuSetup` }. O hash é a **única prova de
 integridade** do pacote — ele não é assinado por CA pública (decisão D6 do PRD-TEFINST-00). Confira
 com:
 

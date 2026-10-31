@@ -118,9 +118,7 @@ public partial class InstaladoresCiArchitectureTests
             if (instalador.Projetos.Count == 0)
                 problemas.Add($"'{instalador.Servico}': nenhum projeto declarado.");
 
-            problemas.AddRange(instalador.Projetos
-                .Where(p => !servicos.Contains(p))
-                .Select(p => $"'{instalador.Servico}': {p} não é (mais) um Windows Service em src/."));
+            problemas.AddRange(ProblemasDosProjetos(instalador, servicos));
 
             // Canais (PRD-INSTDEV-01): a linha sem canal não é empacotada por pipeline nenhum, e o
             // instalador desapareceria dos dois sem nada ficar vermelho — a mesma classe de furo que
@@ -264,6 +262,74 @@ public partial class InstaladoresCiArchitectureTests
         Assert.Contains($"-ArquivoHash '{webView2.Hash}'", build, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Linha com <c>aguardaBackend</c> sai da matriz no job <c>matriz</c>, com aviso, quando o projeto ainda não existe
+    /// no commit empacotado do backend (PRD-MGGINST-01) — e só ela.
+    /// </summary>
+    /// <remarks>
+    /// Sem o filtro, o instalador que chega aqui antes do código chegar à <c>dev</c>/<c>prod</c> do backend derrubaria
+    /// o <c>empacotar</c> em todo dispatch. Com um filtro que ignorasse o campo, qualquer projeto sumido sairia da
+    /// matriz em silêncio (armadilha h): por isso o <c>::warning::</c> e o <c>select(.aguardaBackend)</c>.
+    /// </remarks>
+    [Fact]
+    public void Matriz_TiraComAvisoSoALinhaQueAguardaOBackend()
+    {
+        var yml = File.ReadAllText(Path.Combine(Raizes.Instaladores, ".github", "workflows", "instaladores-windows.yml"));
+
+        Assert.Contains("select(.aguardaBackend) | .servico", yml, StringComparison.Ordinal);
+        Assert.Contains("git -C backend cat-file -e \"$sha:src/$projeto/$projeto.csproj\"", yml, StringComparison.Ordinal);
+        Assert.Matches(@"echo ""::warning::'\$servico' fora da matriz", yml);
+    }
+
+    /// <summary>Problemas dos projetos de uma linha, conforme o <c>tipo</c> (PRD-MGGINST-01).</summary>
+    /// <param name="instalador">Linha do manifesto.</param>
+    /// <param name="servicos">Windows Services de <c>src/</c>.</param>
+    /// <returns>Uma mensagem por problema.</returns>
+    /// <remarks>
+    /// <c>servico</c> (padrão): todo projeto é Windows Service. <c>aplicativo</c> (app de desktop, como o Migrador
+    /// Galileu): o <c>.csproj</c> existe em <c>src/</c> e o projeto <b>não</b> é Windows Service — um serviço
+    /// declarado como aplicativo escaparia das regras de serviço. Com <c>aguardaBackend</c>, projeto ausente de
+    /// <c>src/</c> é esperado: o código ainda não chegou à branch do backend contra a qual a guarda roda.
+    /// </remarks>
+    private static IEnumerable<string> ProblemasDosProjetos(Instalador instalador, HashSet<string> servicos)
+    {
+        if (!TiposValidos.Contains(instalador.Tipo))
+        {
+            yield return $"'{instalador.Servico}': tipo '{instalador.Tipo}' fora de {{{string.Join(", ", TiposValidos)}}}.";
+            yield break;
+        }
+
+        if (instalador.AguardaBackend is not null && string.IsNullOrWhiteSpace(instalador.AguardaBackend))
+            yield return $"'{instalador.Servico}': 'aguardaBackend' vazio — informe o PR do backend ou remova o campo.";
+
+        foreach (var projeto in instalador.Projetos)
+        {
+            var existe = File.Exists(Path.Combine(Raizes.Backend, "src", projeto, projeto + ".csproj"));
+
+            if (!existe && !string.IsNullOrWhiteSpace(instalador.AguardaBackend))
+                continue;
+
+            if (instalador.Tipo == TipoServico && !servicos.Contains(projeto))
+                yield return $"'{instalador.Servico}': {projeto} não é (mais) um Windows Service em src/.";
+
+            if (instalador.Tipo == TipoAplicativo && !existe)
+                yield return $"'{instalador.Servico}': src/{projeto}/{projeto}.csproj não existe no backend " +
+                             "(se o código ainda não chegou à dev/prod de lá, declare 'aguardaBackend' com o PR).";
+
+            if (instalador.Tipo == TipoAplicativo && servicos.Contains(projeto))
+                yield return $"'{instalador.Servico}': {projeto} é Windows Service — declare a linha com tipo '{TipoServico}'.";
+        }
+    }
+
+    /// <summary>Tipo padrão de linha: instalador de Windows Service.</summary>
+    private const string TipoServico = "servico";
+
+    /// <summary>Linha de app de desktop, sem serviço (PRD-MGGINST-01).</summary>
+    private const string TipoAplicativo = "aplicativo";
+
+    /// <summary>Valores aceitos em <c>tipo</c>.</summary>
+    private static readonly string[] TiposValidos = [TipoServico, TipoAplicativo];
+
     /// <summary>Problemas de forma dos payloads de uma linha do manifesto.</summary>
     /// <param name="raiz">Raiz deste repositório.</param>
     /// <param name="instalador">Linha do manifesto.</param>
@@ -348,7 +414,13 @@ public partial class InstaladoresCiArchitectureTests
             return manifesto! with
             {
                 Instaladores = (manifesto!.Instaladores ?? [])
-                    .Select(i => i with { Projetos = i.Projetos ?? [], Payloads = i.Payloads ?? [], Canais = i.Canais ?? [] })
+                    .Select(i => i with
+                    {
+                        Projetos = i.Projetos ?? [],
+                        Payloads = i.Payloads ?? [],
+                        Canais = i.Canais ?? [],
+                        Tipo = i.Tipo ?? TipoServico
+                    })
                     .ToList(),
                 Pendentes = manifesto.Pendentes ?? []
             };
@@ -362,13 +434,17 @@ public partial class InstaladoresCiArchitectureTests
     /// <param name="Projetos">Windows Services empacotados por este instalador.</param>
     /// <param name="Payloads">Binários de terceiro que o pacote embute a partir de um cache do runner (PRD-TOTEMINST-02).</param>
     /// <param name="Canais">Canais em que o CI empacota esta linha (<c>dev</c>, <c>prod</c>).</param>
+    /// <param name="Tipo"><c>servico</c> (padrão) ou <c>aplicativo</c> (PRD-MGGINST-01).</param>
+    /// <param name="AguardaBackend">PR do backend que ainda não chegou à dev/prod de lá, ou <c>null</c> (PRD-MGGINST-01).</param>
     private sealed record Instalador(
         string Servico,
         string Nome,
         string Script,
         List<string> Projetos,
         List<Payload> Payloads,
-        List<string> Canais);
+        List<string> Canais,
+        string Tipo,
+        string? AguardaBackend);
 
     /// <summary>Item de <c>payloads</c>: um binário de terceiro vindo do cache do runner.</summary>
     /// <param name="Parametro">Parâmetro do <c>build-installer.ps1</c> que recebe a pasta do cache.</param>

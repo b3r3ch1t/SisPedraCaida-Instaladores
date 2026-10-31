@@ -1,6 +1,7 @@
 name: Instaladores Windows
 
-# Gera os instaladores dos Windows services a partir de um commit exato do BACKEND, cada um num
+# Gera os instaladores dos Windows services (e do Migrador Galileu, app de desktop — PRD-MGGINST-01) a
+# partir de um commit exato do BACKEND, cada um num
 # WORKTREE SEPARADO, e os publica nas releases DESTE repositório conforme o canal. Épicos
 # ci-instaladores-prod (PRD-INSTPROD-04) e ci-instaladores-dev (PRD-INSTDEV-02/03), trazidos do
 # SisPedraCaida-Backend quando os instaladores ganharam repositório próprio (23/10/2026).
@@ -201,6 +202,22 @@ jobs:
           # o jq com erro que não fala de canal.
           matriz="$(jq -c --arg c "$CANAL" '[.instaladores[] | select(.canais // [] | index($c))]' \
             installer/instaladores-ci.json)"
+
+          # Linha com `aguardaBackend` (PRD-MGGINST-01): o instalador chegou aqui antes de o código chegar à
+          # dev/prod do backend. Se algum projeto dela não existe no commit empacotado, a linha sai da matriz
+          # com AVISO no run — não em silêncio (armadilha h) e sem derrubar o empacotamento dos outros.
+          # Linha sem o campo nunca é filtrada: projeto sumido continua reprovando no `empacotar`.
+          for servico in $(jq -r '.[] | select(.aguardaBackend) | .servico' <<<"$matriz"); do
+            for projeto in $(jq -r --arg s "$servico" '.[] | select(.servico == $s) | .projetos[]' <<<"$matriz"); do
+              if ! git -C backend cat-file -e "$sha:src/$projeto/$projeto.csproj" 2>/dev/null; then
+                aguarda="$(jq -r --arg s "$servico" '.[] | select(.servico == $s) | .aguardaBackend' <<<"$matriz")"
+                echo "::warning::'$servico' fora da matriz: src/$projeto não existe no backend ${sha:0:7} (aguarda $aguarda)."
+                matriz="$(jq -c --arg s "$servico" 'map(select(.servico != $s))' <<<"$matriz")"
+                break
+              fi
+            done
+          done
+
           if [ "$(jq 'length' <<<"$matriz")" -eq 0 ]; then
             echo "::error::installer/instaladores-ci.json sem instaladores para o canal '$CANAL'."
             exit 1

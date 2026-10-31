@@ -1,5 +1,5 @@
 {
-  "_comentario": "Fonte unica da matriz de instaladores do CI, por canal (PRD-INSTPROD-02/04 + PRD-INSTDEV-01). Todo projeto de src/ que se registra como Windows Service (UseWindowsService/AddWindowsService) precisa aparecer em 'instaladores[].projetos' ou, enquanto o instalador nao existe, em 'pendentes' com o PRD que o entrega. 'canais' diz em QUAIS canais o CI empacota a linha ('dev' e/ou 'prod'); 'prod' e obrigatorio em todas, porque e o canal de campo. 'payloads' (PRD-TOTEMINST-02) declara cada binario de terceiro que o pacote embute a partir de um cache do runner: 'parametro' do build-installer.ps1 que recebe a pasta, 'variavel' de repositorio com o caminho do cache, 'hash' (arquivo .sha256 na pasta), 'descricao' e 'seAusente' (o efeito, para o diagnostico). No CI todo payload declarado e OBRIGATORIO; o job empacotar e o diagnostico so iteram esta lista, e toda 'variavel' precisa estar no env: dos dois workflows. Filtrar servico ou payload no YAML em vez de aqui criaria uma segunda fonte de verdade, cega a esta guarda. Cobrado por InstaladoresCiArchitectureTests.",
+  "_comentario": "Fonte unica da matriz de instaladores do CI, por canal (PRD-INSTPROD-02/04 + PRD-INSTDEV-01). Todo projeto de src/ que se registra como Windows Service (UseWindowsService/AddWindowsService) precisa aparecer em 'instaladores[].projetos' ou, enquanto o instalador nao existe, em 'pendentes' com o PRD que o entrega. 'canais' diz em QUAIS canais o CI empacota a linha ('dev' e/ou 'prod'); 'prod' e obrigatorio em todas, porque e o canal de campo. 'payloads' (PRD-TOTEMINST-02) declara cada binario de terceiro que o pacote embute a partir de um cache do runner: 'parametro' do build-installer.ps1 que recebe a pasta, 'variavel' de repositorio com o caminho do cache, 'hash' (arquivo .sha256 na pasta), 'descricao' e 'seAusente' (o efeito, para o diagnostico). No CI todo payload declarado e OBRIGATORIO; o job empacotar e o diagnostico so iteram esta lista, e toda 'variavel' precisa estar no env: dos dois workflows. Filtrar servico ou payload no YAML em vez de aqui criaria uma segunda fonte de verdade, cega a esta guarda. 'tipo' (PRD-MGGINST-01): 'servico' (padrao, quando ausente) exige que todo projeto seja Windows Service; 'aplicativo' (app de desktop, sem servico) exige so o .csproj em src/. 'aguardaBackend' (PRD-MGGINST-01, opcional): o PR do backend que ainda nao chegou a dev/prod de la; enquanto preenchido, projeto ausente de src/ nao reprova a guarda e o job matriz tira a linha com ::warning::. Retirar so depois de a prod do backend ter o codigo. Cobrado por InstaladoresCiArchitectureTests.",
   "instaladores": [
     {
       "servico": "tefagent",
@@ -40,6 +40,16 @@
         }
       ],
       "canais": ["dev", "prod"]
+    },
+    {
+      "servico": "migracao-galileu",
+      "nome": "MigracaoGalileuSetup",
+      "script": "installer/migracao-galileu/build-installer.ps1",
+      "tipo": "aplicativo",
+      "projetos": ["SisPedraCaida.Tools.MigracaoGalileu.App"],
+      "payloads": [],
+      "canais": ["dev", "prod"],
+      "aguardaBackend": "b3r3ch1t/SisPedraCaida-Backend#1396 (na dev do backend desde 31/10/2026; falta chegar a prod)"
     }
   ],
   "pendentes": []
