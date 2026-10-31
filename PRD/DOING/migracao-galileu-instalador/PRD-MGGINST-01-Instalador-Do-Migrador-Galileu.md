@@ -51,6 +51,12 @@ Com `aguardaBackend` preenchido na linha do manifesto:
 Retirar o campo **só depois** de a `prod` do backend ter o migrador (como na armadilha x): antes disso o
 `ci.yml` de PR para a `prod` e o empacotamento de campo reprovariam.
 
+**Atualização 31/10/2026 13:02:** durante este trabalho o #1396 foi mesclado na `dev` do backend (`61e55ed27`).
+O campo continua: a `prod` do backend ainda não tem o migrador. Prova da regra, num worktree descartável da `dev`
+do backend com `src/SisPedraCaida.Tools.MigracaoGalileu.App` removido: com `aguardaBackend`, 105/105 verdes; sem o
+campo, 3 vermelhos (`TodaLinhaDoManifesto_EstaViva` e as duas guardas do lado do backend). Contra a `prod` do
+backend o projeto de testes nem compila hoje — armadilha x do PrintMonitor, anterior a este PRD.
+
 ## Mudanças
 
 1. `installer/migracao-galileu/MigracaoGalileu.iss` + `build-installer.ps1` (D1–D5).

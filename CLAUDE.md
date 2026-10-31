@@ -1,6 +1,8 @@
 # SisPedraCaida-Instaladores — Guia
 
-> **Última atualização deste CLAUDE.md:** 30/10/2026 17:55 (horário local, UTC-3) — o `PrintMonitorSetup` **escolhe as
+> **Última atualização deste CLAUDE.md:** 31/10/2026 13:40 (horário local, UTC-3) — instalador do **Migrador
+> Galileu** (`installer/migracao-galileu/`, PRD-MGGINST-01): primeiro instalador de **app de desktop** (sem serviço);
+> manifesto ganha `tipo` e `aguardaBackend` (armadilha **y**) · antes (30/10/2026 17:55): o `PrintMonitorSetup` **escolhe as
 > impressoras da estação** (PRD-PMSEL-INST-02, página "Impressoras desta estação"; `/IMPRESSORAS=`/`/IMPRESSORAPADRAO=`
 > no silencioso; armadilha **x**: promover para a `prod` só depois da `prod` do backend ter o PRD-PMSEL-AG-01)
 > · antes (30/10/2026 16:10): o `TefAgentSetup` **não baixa
@@ -43,6 +45,7 @@ pipeline que os gera e publica. Comunicação, docs, commits e PRDs em **portugu
 | `TefAgentSetup-X.Y.Z.exe` | `Tef.Agent` + `Tef.Agent.Setup` + `Tef.Agent.Tray` | [`installer/tefagent/build-installer.ps1`](installer/tefagent/build-installer.ps1) | dev, prod |
 | `PrintMonitorSetup-X.Y.Z.exe` | `PrintMonitor.{Service,Setup,Helper,Bootstrapper,Tray}` | [`installer/printmonitor/build-installer.ps1`](installer/printmonitor/build-installer.ps1) | dev, prod |
 | `TotemSetup-X.Y.Z.exe` | `Totem.Agent` + `Totem.Setup` + `Totem.Shell` (publish no próprio script; bootstrapper do WebView2 do cache do runner, opcional só no build local; guardas em `tests/…/Totem/`) | [`installer/totem/build-installer.ps1`](installer/totem/build-installer.ps1) | dev, prod |
+| `MigracaoGalileuSetup-X.Y.Z.exe` | `Tools.MigracaoGalileu.App` (+ `.Core`): app WinForms, **não** é serviço (`tipo: aplicativo`); `scripts/migracao-galileu-publish.ps1` do backend, single-file; guardas em `tests/…/MigracaoGalileu/` | [`installer/migracao-galileu/build-installer.ps1`](installer/migracao-galileu/build-installer.ps1) | dev, prod (sai da matriz com aviso enquanto a `prod` do backend não tem o código — armadilha **y**) |
 
 A matriz é **[`installer/instaladores-ci.json`](installer/instaladores-ci.json)** — nunca o YAML.
 
@@ -84,6 +87,7 @@ installer/
 ├── assets/sispedracaida.ico
 ├── common/                     # Empacotamento.psm1 (núcleo) + Pester + montar-instalador.ps1/.cmd
 ├── tefagent/  printmonitor/  totem/   # .iss + includes + build-installer.ps1 (+ payloads fora do git)
+├── migracao-galileu/           # app de desktop: um .iss só (sem provisionamento) + build-installer.ps1
 scripts/runner-windows-diagnostico.ps1   # pré-requisitos do runner Windows
 scripts/preparar-runner-windows.ps1      # prepara e registra o runner (admin, idempotente)
 tests/SisPedraCaida.Instaladores.Tests/  # guardas .iss × C# do backend (xUnit, net10.0-windows)
@@ -196,4 +200,5 @@ repositório (`m`–`p`).
 | u | Guarda verde no PR para a `dev` e vermelha na promoção para a `prod` (ou no `testar` da reemissão), com o pacote certo | A guarda lia algo do backend que só existe na `dev` de lá (o runbook com `/CONTEUDOURL=`, PRD-TOTEMINST-01). O CI de PR para a `prod` e o `testar` de prod rodam contra a **`prod` do backend**. Guarda só lê **código** do backend que já esteja na versão empacotada; nunca documentação. Antes de promover, rode `dotnet test … -p:BackendDir=<worktree do backend na origin/prod>/` |
 | v | Instaladores da `dev-latest` **versões atrás** da API (`5.7.0` com a API da `dev` em `5.13.0`, 30/10/2026), ou **uma à frente** | A API da `dev` reporta o `VersionPrefix` do commit **construído**, e o commit de versão do release-please não é construído (`paths-ignore` do publish de lá) — mesclado com o `GITHUB_TOKEN`, nem dispara workflow, então o gatilho por `paths` que esperava por ele nunca empacotava o número novo. O backend (#134 de lá) agora dispara no gatilho do publish da `dev`, só quando a versão ou os agentes mudam, com `-f versao`. Aqui, sem `versao` a `dev` lê o `VersionPrefix` do commit empacotado, e **sem `sha` volta do HEAD da `dev` do backend até o último commit construído** (o primeiro, na linha de primeiros pais, que muda algo além de `Directory.Build.props`, `CHANGELOG.md` e `.release-please-manifest.json`) — empacotar o HEAD daria o número do commit de versão, que a API ainda não tem. Conferir: `GET /api/v1/versao` da `dev` = versão dos `.exe` da `dev-latest` |
 | w | `TefAgentSetup` trava em "Elgin TEF HUB"/"E1_Connect" e nunca termina (até 30/10/2026) | O instalador baixava o TEF HUB e o rodava com `/VERYSILENT` e `ewWaitUntilTerminated`; o pacote da Elgin encadeia os instaladores dos componentes, que não obedecem ao silencioso. Desde o PRD-ELGPRE-01 os dois são **pré-requisito bloqueante** no `InitializeSetup` (diálogo com o link da pasta oficial + "Verificar novamente"; silencioso sai com 1), `/SEMTEFHUB=1` é aceito e ignorado. Nunca `Exec` de instalador de terceiro: guarda `TefAgentPreRequisitosElginGuardTests` |
+| y | Instalador novo cujo código ainda não chegou à `dev`/`prod` do backend: `ci.yml` vermelho e `empacotar` reprovando "Fonte incompleta" em todo dispatch | Campo **`aguardaBackend`** na linha do manifesto (o PR do backend; PRD-MGGINST-01). Com ele, projeto ausente de `src/` não reprova a guarda (sem ele, reprova), as guardas do lado do backend só rodam com o projeto presente, e o job `matriz` tira a linha com `::warning::` citando o PR — nunca em silêncio (armadilha h). Retire o campo **só depois** de a `prod` do backend ter o código. App de desktop (sem `UseWindowsService`) vai com `"tipo": "aplicativo"`: a guarda exige o `.csproj` em `src/` e que ele **não** seja serviço. Migrador Galileu: na `dev` do backend desde 31/10/2026 (#1396 de lá), falta a `prod` |
 | x | Guardas do PrintMonitor não compilam na promoção para a `prod` (`SelecaoImpressorasEstacao` / `SetupParameters.SelecaoImpressoras` não existem), ou o técnico escolhe impressoras no wizard e a estação não as grava | A página "Impressoras desta estação" (PRD-PMSEL-INST-02) consome o contrato do PRD-PMSEL-AG-01 do backend (#1348, `dev` de lá em 29/10/2026): o `Setup.exe` antigo ignora `ImpressorasHabilitadas`/`ImpressoraPadrao` em silêncio. É o inverso da regra de sempre: aqui o `.iss` depende do C#, então a promoção `dev` → `prod` **deste** repo vai **depois** da promoção do backend que leve o #1348. Conferir com `dotnet test … -p:BackendDir=<worktree do backend na origin/prod>/` |
