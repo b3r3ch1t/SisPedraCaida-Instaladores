@@ -1,6 +1,6 @@
 # SisPedraCaida-Instaladores — Guia
 
-> **Última atualização deste CLAUDE.md:** 31/10/2026 13:40 (horário local, UTC-3) — instalador do **Migrador
+> **Última atualização deste CLAUDE.md:** 31/10/2026 13:28 (horário local, UTC-3) — instalador do **Migrador
 > Galileu** (`installer/migracao-galileu/`, PRD-MGGINST-01): primeiro instalador de **app de desktop** (sem serviço);
 > manifesto ganha `tipo` e `aguardaBackend` (armadilha **y**) · antes (30/10/2026 17:55): o `PrintMonitorSetup` **escolhe as
 > impressoras da estação** (PRD-PMSEL-INST-02, página "Impressoras desta estação"; `/IMPRESSORAS=`/`/IMPRESSORAPADRAO=`

@@ -1,6 +1,6 @@
 # Gerar os instaladores Windows localmente
 
-> **Última atualização:** 31/10/2026 13:40 (horário local, UTC-3) — `MigracaoGalileuSetup` (PRD-MGGINST-01):
+> **Última atualização:** 31/10/2026 13:28 (horário local, UTC-3) — `MigracaoGalileuSetup` (PRD-MGGINST-01):
 > enquanto a `prod` do backend não tem o migrador, `-Ref origin/dev` explícito. Antes (27/10/2026 16:40): WebView2
 > do totem: opcional no build local, obrigatório no CI (PRD-TOTEMINST-02). Antes (23/10/2026 17:30): instaladores em repositório próprio:
 > os scripts rodam **neste** repositório e pinam o código do agente num clone do backend (`-BackendRoot`,
