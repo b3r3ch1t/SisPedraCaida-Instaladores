@@ -1,6 +1,6 @@
 # PRD-MGGINST-01 — Instalador Windows do Migrador Galileu
 
-> **Status:** Em andamento — **Última atualização:** 31/10/2026 13:01
+> **Status:** Concluído — **Última atualização:** 31/10/2026 13:28
 
 ## Contexto
 
