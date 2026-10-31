@@ -37,6 +37,19 @@ public class InstaladoresUpgradeArchitectureTests
         { "totem", "Totem.iss" },
     };
 
+    /// <summary>
+    /// Agentes mais os aplicativos de desktop (Migrador Galileu, PRD-MGGINST-01), que seguem a política de downgrade e
+    /// de <c>%PROGRAMDATA%</c> mas não a de identidade: sem <c>Setup.exe</c> para parar processo, o aplicativo usa
+    /// <c>CloseApplications=yes</c> (guarda própria em <c>MigracaoGalileuInnoGuardTests</c>).
+    /// </summary>
+    public static TheoryData<string, string> InstaladoresEAplicativos => new()
+    {
+        { "tefagent", "TefAgent.iss" },
+        { "printmonitor", "PrintMonitor.iss" },
+        { "totem", "Totem.iss" },
+        { "migracao-galileu", "MigracaoGalileu.iss" },
+    };
+
     /// <summary>AppId fixo, binários com ignoreversion, Inno sem fechar processos por conta própria.</summary>
     /// <param name="pasta">Pasta do instalador sob <c>installer/</c>.</param>
     /// <param name="principal">Arquivo <c>.iss</c> principal.</param>
@@ -55,7 +68,7 @@ public class InstaladoresUpgradeArchitectureTests
     /// <param name="pasta">Pasta do instalador sob <c>installer/</c>.</param>
     /// <param name="principal">Arquivo <c>.iss</c> principal.</param>
     [Theory]
-    [MemberData(nameof(Instaladores))]
+    [MemberData(nameof(InstaladoresEAplicativos))]
     public void Instalador_NaoApagaNadaEmProgramData(string pasta, string principal)
     {
         var ativas = Ler(pasta, principal).Split('\n')
@@ -71,7 +84,7 @@ public class InstaladoresUpgradeArchitectureTests
     /// <param name="pasta">Pasta do instalador sob <c>installer/</c>.</param>
     /// <param name="principal">Arquivo <c>.iss</c> principal.</param>
     [Theory]
-    [MemberData(nameof(Instaladores))]
+    [MemberData(nameof(InstaladoresEAplicativos))]
     public void Instalador_BloqueiaDowngrade_EAceitaAMesmaVersao(string pasta, string principal)
     {
         var iss = Ler(pasta, principal);
