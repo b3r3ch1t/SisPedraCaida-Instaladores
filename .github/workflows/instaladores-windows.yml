@@ -1,6 +1,7 @@
 name: Instaladores Windows
 
-# Gera os instaladores dos Windows services a partir de um commit exato do BACKEND, cada um num
+# Gera os instaladores dos Windows services (e do Migrador Galileu, app de desktop — PRD-MGGINST-01) a
+# partir de um commit exato do BACKEND, cada um num
 # WORKTREE SEPARADO, e os publica nas releases DESTE repositório conforme o canal. Épicos
 # ci-instaladores-prod (PRD-INSTPROD-04) e ci-instaladores-dev (PRD-INSTDEV-02/03), trazidos do
 # SisPedraCaida-Backend quando os instaladores ganharam repositório próprio (23/10/2026).

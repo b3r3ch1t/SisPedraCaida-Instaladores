@@ -1,6 +1,7 @@
 name: Instaladores Windows (dev)
 
-# Regera TefAgentSetup, PrintMonitorSetup e TotemSetup a partir da `dev` do backend (PRD-INSTDEV-02).
+# Regera TefAgentSetup, PrintMonitorSetup, TotemSetup e MigracaoGalileuSetup a partir da `dev` do backend
+# (PRD-INSTDEV-02; o migrador desde o PRD-MGGINST-01). A lista vem do manifesto, não deste arquivo.
 #
 # SOMENTE MANUAL DESDE 30/10/2026: o push na `dev` não empacota mais (nem aqui nem no backend, junto com
 # o publish das imagens da `dev`). Rodar pela aba Actions ou `gh workflow run instaladores-dev.yml --ref dev`.
