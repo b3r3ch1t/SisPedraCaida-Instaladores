@@ -370,10 +370,10 @@ public class InstaladorUpgradeGuardTests
         var provisionamento = Ler("provisioning.iss");
         var executar = Corpo(provisionamento, "procedure ExecutarProvisionamento();");
 
-        // Depois do serviço (--all) e do driver.
-        var driver = executar.IndexOf("InstalarDriverBematech();", StringComparison.Ordinal);
+        // Depois do serviço (--all) provisionado com sucesso — a última mensagem de status do provisionamento.
+        var provisionada = executar.IndexOf("Status('Estação provisionada. Detalhe por etapa em '", StringComparison.Ordinal);
         var iniciar = executar.IndexOf("IniciarProcessosDaSessao();", StringComparison.Ordinal);
-        Assert.True(driver >= 0 && iniciar > driver, "IniciarProcessosDaSessao vem depois do driver, no fim do provisionamento.");
+        Assert.True(provisionada >= 0 && iniciar > provisionada, "IniciarProcessosDaSessao vem depois do provisionamento, no fim dele.");
         Assert.DoesNotContain("ReabrirProcessosDaSessao", upgrade + provisionamento, StringComparison.Ordinal);
 
         var corpo = Corpo(upgrade, "procedure IniciarProcessosDaSessao();");

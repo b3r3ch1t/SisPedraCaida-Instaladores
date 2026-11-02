@@ -1,6 +1,7 @@
 name: Instaladores Windows
 
-# Gera os instaladores dos Windows services a partir de um commit exato do BACKEND, cada um num
+# Gera os instaladores dos Windows services (e do Migrador Galileu, app de desktop — PRD-MGGINST-01) a
+# partir de um commit exato do BACKEND, cada um num
 # WORKTREE SEPARADO, e os publica nas releases DESTE repositório conforme o canal. Épicos
 # ci-instaladores-prod (PRD-INSTPROD-04) e ci-instaladores-dev (PRD-INSTDEV-02/03), trazidos do
 # SisPedraCaida-Backend quando os instaladores ganharam repositório próprio (23/10/2026).
@@ -12,7 +13,8 @@ name: Instaladores Windows
 # QUEM CHAMA:
 #   - o backend, por `gh workflow run` (workflow_dispatch) com o token INSTALADORES_DISPATCH_TOKEN:
 #       · release-please-prod.yml → `--ref prod -f canal=prod -f sha -f versao -f tag`, no push da prod;
-#       · instaladores-dev.yml    → `--ref dev  -f canal=dev  -f sha`, no push da dev que toca os agentes.
+#       · instaladores-dev.yml    → `--ref dev  -f canal=dev  -f sha -f versao`, no push da dev que muda a
+#         versão da API ou os agentes (a versão é o VersionPrefix do commit, a mesma da API).
 #     Cruzar repositório por `workflow_call` não é possível: o reusable de um repo privado só é
 #     chamável do mesmo repositório (ou de outro com acesso concedido pela organização — conta pessoal
 #     não tem essa opção).
@@ -143,12 +145,16 @@ jobs:
           # produção.
           ref: ${{ inputs.sha || inputs.canal }}
           path: backend
+          # Histórico completo: na dev sem `sha`, o resolver volta pela linha de primeiros pais até o
+          # último commit que o publish da dev construiu.
+          fetch-depth: 0
 
       - name: Resolver commit, versão e matriz
         id: resolver
         shell: bash
         env:
           CANAL: ${{ inputs.canal }}
+          SHA_INFORMADO: ${{ inputs.sha }}
           VERSAO_INFORMADA: ${{ inputs.versao }}
           TAG_INFORMADA: ${{ inputs.tag }}
         run: |
@@ -165,11 +171,27 @@ jobs:
           scripts_sha="$(git rev-parse HEAD)"
           tag="${TAG_INFORMADA:-}"
 
-          # Versão: a informada > a da tag (prefixo do canal) > o núcleo do manifesto do canal.
+          # A DEV TEM A VERSÃO DA API (30/10/2026). A API da dev reporta o VersionPrefix do commit em
+          # que a imagem foi construída, e o commit de versão do release-please não é construído (está
+          # nos `paths-ignore` do publish do backend). Sem `sha` informado, o HEAD da dev do backend
+          # costuma ser justamente esse commit — e o pacote sairia uma versão à frente da API. Volta
+          # pela linha de primeiros pais até o último commit que muda algo além dos três arquivos dele.
+          if [ "$CANAL" = 'dev' ] && [ -z "${SHA_INFORMADO:-}" ]; then
+            sha="$(git -C backend log --first-parent -n 1 --format=%H HEAD -- . \
+              ':(exclude)Directory.Build.props' ':(exclude)CHANGELOG.md' \
+              ':(exclude).release-please-manifest.json')"
+          fi
+
+          # Versão: a informada > a da tag (prefixo do canal) > na dev, o VersionPrefix do commit
+          # empacotado (a mesma régua da API e dos *-publish.ps1); na prod, o núcleo do manifesto.
           # Só X.Y.Z numérico: o Inno grava VersionInfoVersion, que recusa sufixo (-rc, -sha…) — é
           # também o que impede apontar este workflow para a staging sem resolver o sufixo antes.
           versao="${VERSAO_INFORMADA:-}"
           if [ -z "$versao" ] && [ -n "$tag" ]; then versao="${tag#"$prefixo"}"; fi
+          if [ -z "$versao" ] && [ "$CANAL" = 'dev' ]; then
+            versao="$(git -C backend show "$sha:Directory.Build.props" \
+              | sed -n 's:.*<VersionPrefix>\([0-9][0-9.]*\)</VersionPrefix>.*:\1:p' | head -n 1)"
+          fi
           if [ -z "$versao" ]; then versao="$(jq -r '."."' "$manifesto")"; fi
           if ! [[ "$versao" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Versão '$versao' fora de X.Y.Z (canal '$CANAL', tag '${tag}')."
@@ -180,6 +202,22 @@ jobs:
           # o jq com erro que não fala de canal.
           matriz="$(jq -c --arg c "$CANAL" '[.instaladores[] | select(.canais // [] | index($c))]' \
             installer/instaladores-ci.json)"
+
+          # Linha com `aguardaBackend` (PRD-MGGINST-01): o instalador chegou aqui antes de o código chegar à
+          # dev/prod do backend. Se algum projeto dela não existe no commit empacotado, a linha sai da matriz
+          # com AVISO no run — não em silêncio (armadilha h) e sem derrubar o empacotamento dos outros.
+          # Linha sem o campo nunca é filtrada: projeto sumido continua reprovando no `empacotar`.
+          for servico in $(jq -r '.[] | select(.aguardaBackend) | .servico' <<<"$matriz"); do
+            for projeto in $(jq -r --arg s "$servico" '.[] | select(.servico == $s) | .projetos[]' <<<"$matriz"); do
+              if ! git -C backend cat-file -e "$sha:src/$projeto/$projeto.csproj" 2>/dev/null; then
+                aguarda="$(jq -r --arg s "$servico" '.[] | select(.servico == $s) | .aguardaBackend' <<<"$matriz")"
+                echo "::warning::'$servico' fora da matriz: src/$projeto não existe no backend ${sha:0:7} (aguarda $aguarda)."
+                matriz="$(jq -c --arg s "$servico" 'map(select(.servico != $s))' <<<"$matriz")"
+                break
+              fi
+            done
+          done
+
           if [ "$(jq 'length' <<<"$matriz")" -eq 0 ]; then
             echo "::error::installer/instaladores-ci.json sem instaladores para o canal '$CANAL'."
             exit 1
@@ -328,9 +366,8 @@ jobs:
       PAYLOADS: ${{ toJson(matrix.payloads) }}
       # As pastas dos caches, fora do git. ⚠️ O contexto `vars` não é enumerável em runtime: toda variável
       # de payload do manifesto precisa de uma linha aqui (guarda TodaVariavelDePayload_EstaNosDoisWorkflows).
-      # QZ Tray (PRD-INSTPROD-01) e driver Bematech MP-4200 TH (PRD-PMTRAY-02) do PrintMonitor.
+      # QZ Tray do PrintMonitor (PRD-INSTPROD-01). O driver da Bematech saiu do pacote (PRD-PMSEL-INST-01).
       PRINTMONITOR_PAYLOAD_DIR: ${{ vars.PRINTMONITOR_PAYLOAD_DIR }}
-      PRINTMONITOR_DRIVERS_PAYLOAD_DIR: ${{ vars.PRINTMONITOR_DRIVERS_PAYLOAD_DIR }}
       # Bootstrapper do WebView2 Runtime do totem (PRD-TOTEMINST-02).
       TOTEM_WEBVIEW2_PAYLOAD_DIR: ${{ vars.TOTEM_WEBVIEW2_PAYLOAD_DIR }}
       # core.longpaths para TODO git deste job, sem depender da configuração global do runner: o

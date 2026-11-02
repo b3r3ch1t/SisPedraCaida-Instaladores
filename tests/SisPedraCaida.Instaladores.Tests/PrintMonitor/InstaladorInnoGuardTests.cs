@@ -3,6 +3,7 @@ using Moq;
 using SisPedraCaida.Domain.Interfaces;
 using SisPedraCaida.PrintMonitor.Core.Abstractions;
 using SisPedraCaida.PrintMonitor.Core.Constants;
+using SisPedraCaida.PrintMonitor.Core.Inventory;
 using SisPedraCaida.PrintMonitor.Core.Options;
 using SisPedraCaida.PrintMonitor.Core.Provisioning;
 using SisPedraCaida.PrintMonitor.Infrastructure.Provisioning;
@@ -64,7 +65,7 @@ public class InstaladorInnoGuardTests
 
         Assert.Equal(
             ["ApiKey", "LoopbackPrintEnabled", "LoopbackPrintRouteSecret", "LoopbackPrintSegredoIdentidade",
-             "LoopbackPrintOrigensPermitidas"],
+             "LoopbackPrintOrigensPermitidas", "ImpressorasHabilitadas", "ImpressoraPadrao"],
             chaves);
 
         var arquivo = Path.Combine(Path.GetTempPath(), $"pm-guard-{Guid.NewGuid():N}.txt");
@@ -74,6 +75,7 @@ public class InstaladorInnoGuardTests
             [
                 "ApiKey=chave", "LoopbackPrintEnabled=true", "LoopbackPrintRouteSecret=impressao-0123456789",
                 "LoopbackPrintSegredoIdentidade=identidade-0123456789", "LoopbackPrintOrigensPermitidas=https://a.exemplo.com",
+                "ImpressorasHabilitadas=Fila A|Fila B", "ImpressoraPadrao=Fila B",
             ]);
 
             var p = SetupParameters.Parse(["--config-file", arquivo]);
@@ -83,6 +85,8 @@ public class InstaladorInnoGuardTests
             Assert.Equal("impressao-0123456789", p.LoopbackRouteSecret);
             Assert.Equal("identidade-0123456789", p.LoopbackSegredoIdentidade);
             Assert.Equal(["https://a.exemplo.com"], p.LoopbackOrigensPermitidas);
+            Assert.Equal(["Fila A", "Fila B"], p.SelecaoImpressoras!.Habilitadas);
+            Assert.Equal("Fila B", p.SelecaoImpressoras.Padrao);
         }
         finally
         {
@@ -106,6 +110,74 @@ public class InstaladorInnoGuardTests
             StringComparison.Ordinal);
         Assert.Contains($"TamanhoMinimoSegredoLoopback = {SetupParameters.TamanhoMinimoSegredo};", pages,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ConstantesDasImpressoras_NoIss_SaoAsMesmasDoAgente()
+    {
+        // PRD-PMSEL-INST-02: o .iss relê a escolha gravada nessas variáveis (pré-marca a página e decide se reenvia) e
+        // monta a lista como SelecaoImpressorasEstacao.MontarOpcoes. Nome divergente = upgrade que "esquece" a escolha.
+        var pages = Ler("pages.iss");
+
+        Assert.Contains($"VarImpressorasHabilitadas = '{StationEnvironmentVariables.ImpressorasHabilitadas}';", pages,
+            StringComparison.Ordinal);
+        Assert.Contains($"VarImpressoraPadrao = '{StationEnvironmentVariables.ImpressoraPadrao}';", pages,
+            StringComparison.Ordinal);
+        Assert.Contains($"SeparadorImpressoras = '{SelecaoImpressorasEstacao.Separador}';", pages, StringComparison.Ordinal);
+
+        var sufixo = Regex.Match(pages, @"SufixoImpressoraAusente = '(?<sufixo>[^']*)';");
+        Assert.True(sufixo.Success, "Constante SufixoImpressoraAusente não encontrada em pages.iss.");
+        Assert.Equal(new OpcaoImpressoraEstacao("Fila", true, false, NoSpooler: false).Rotulo, "Fila" + sufixo.Groups["sufixo"].Value);
+    }
+
+    [Fact]
+    public void ImpressorasIniciais_NoIss_SeguemArquivoParametroChaveAChave_EDepoisAGravada()
+    {
+        // Mesma precedência do SetupParameters.Parse (DoArquivoOuParametro, chave a chave); só sem as duas a gravada.
+        var pages = Ler("pages.iss");
+
+        var ordem = Regex.Match(
+            pages,
+            @"Habilitadas := LerDoArquivoDeConfiguracao\(Arquivo, 'ImpressorasHabilitadas'\);\s*" +
+            @"if Habilitadas = '' then\s*Habilitadas := Parametro\('IMPRESSORAS', ''\);\s*" +
+            @"Padrao := LerDoArquivoDeConfiguracao\(Arquivo, 'ImpressoraPadrao'\);\s*" +
+            @"if Padrao = '' then\s*Padrao := Parametro\('IMPRESSORAPADRAO', ''\);\s*" +
+            @"if \(Trim\(Habilitadas\) = ''\) and \(Trim\(Padrao\) = ''\) then\s*begin\s*" +
+            @"Habilitadas := ImpressorasJaGravadas;\s*Padrao := PadraoJaGravada;");
+        Assert.True(ordem.Success, "Precedência das impressoras iniciais divergente em ValoresIniciaisDasImpressoras (pages.iss).");
+
+        // A lista vem da mesma fonte do inventário (WmiPrinterInventoryCollector), senão o nome marcado não casa com o
+        // NomeSistema que o Helper manda.
+        Assert.Contains("FROM Win32_Printer", pages, StringComparison.Ordinal);
+        Assert.Contains("Nome := Item.Name;", pages, StringComparison.Ordinal);
+        Assert.Contains("ValoresIniciaisDasImpressoras(Arquivo);", pages, StringComparison.Ordinal);
+        Assert.Contains("CriarPaginaDeImpressoras(PaginaIdentidade.ID);", pages, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SelecaoSemPadraoGravadaPeloIss_LimpaAPadraoAnteriorNaEstacao()
+    {
+        // O .iss só escreve ImpressoraPadrao= quando há padrão. Com as habilitadas informadas, o Setup.exe precisa gravar
+        // a padrão VAZIA — senão a padrão de uma escolha anterior sobreviveria à troca feita no instalador.
+        var arquivo = Path.Combine(Path.GetTempPath(), $"pm-guard-{Guid.NewGuid():N}.txt");
+        try
+        {
+            File.WriteAllLines(arquivo, ["ImpressorasHabilitadas=Impressão Cozinha|Bar"]);
+
+            var variaveis = SetupParameters.Parse(["--all", "--config-file", arquivo]).ToEnvironmentVariables();
+
+            Assert.Equal("Impressão Cozinha|Bar", variaveis[StationEnvironmentVariables.ImpressorasHabilitadas]);
+            Assert.Equal(string.Empty, variaveis[StationEnvironmentVariables.ImpressoraPadrao]);
+        }
+        finally
+        {
+            File.Delete(arquivo);
+        }
+
+        // E sem nenhuma das duas chaves o Setup.exe preserva a gravada: é por isso que o .iss não oferece "nenhuma".
+        Assert.False(SetupParameters.Parse(["--all"]).ToEnvironmentVariables()
+            .ContainsKey(StationEnvironmentVariables.ImpressorasHabilitadas));
+        Assert.Contains("if SelecaoDeImpressorasMudou() then", Ler("provisioning.iss"), StringComparison.Ordinal);
     }
 
     /// <summary>Origem padrão do admin que o instalador traz (decisão de 21/10/2026).</summary>
@@ -213,29 +285,31 @@ public class InstaladorInnoGuardTests
     }
 
     [Fact]
-    public void DriverBematech_EhObrigatorio_InstaladoPorExecENuncaDesinstalado()
+    public void DriverBematech_ForaDoPacote_ParametroAntigoAceitoENuncaDesinstalado()
     {
-        // PRD-PMTRAY-02: sem [Tasks], sem Check no [Files], #error sem o payload e o build exige o driver.
+        // PRD-PMSEL-INST-01: o técnico escolhe a impressora no --config-ui e instala o driver do modelo por fora.
+        // O pacote não embute nem instala driver nenhum, e o build não pede mais o payload.
         var principal = Ler("PrintMonitor.iss");
         var provisionamento = Ler("provisioning.iss");
+        var build = Ler("build-installer.ps1");
+
+        foreach (var (nome, texto) in new[] { ("PrintMonitor.iss", principal), ("provisioning.iss", provisionamento), ("build-installer.ps1", build) })
+        {
+            foreach (var resquicio in new[] { "BematechDriverFile", "payload-drivers", "InstalarDriverBematech", "ResumoDriverBematech", "DriversPayloadDir", "driver.sha256" })
+                Assert.False(texto.Contains(resquicio, StringComparison.Ordinal), $"{nome} ainda cita '{resquicio}'.");
+        }
 
         Assert.DoesNotMatch(@"(?m)^\[Tasks\]", principal);
-        Assert.DoesNotMatch(@"Name: ""driverbematech""", principal);
         Assert.DoesNotContain("WizardIsTaskSelected", provisionamento, StringComparison.Ordinal);
-        Assert.DoesNotContain("DriverBematechSelecionado", provisionamento, StringComparison.Ordinal);
-        Assert.Matches(@"#if BematechDriverFile == """"\s*\r?\n(\s*;[^\r\n]*\r?\n)*\s*#error", principal);
-        Assert.Matches(@"(?m)^Source: ""payload-drivers\\\{#BematechDriverFile\}""; DestDir: ""\{tmp\}""; Flags: deleteafterinstall\s*$", principal);
-        Assert.Contains("-Descricao 'o driver da Bematech MP-4200 TH' -Obrigatorio", Ler("build-installer.ps1"), StringComparison.Ordinal);
-        Assert.Contains("'/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-", provisionamento, StringComparison.Ordinal);
 
-        // Política de falha: o driver roda depois do provisionamento e a falha dele não reprova o agente.
-        var instalarDriver = Regex.Match(provisionamento, @"procedure InstalarDriverBematech\(\);[\s\S]*?\nend;").Value;
-        Assert.DoesNotContain("RaiseException", instalarDriver, StringComparison.Ordinal);
-        Assert.DoesNotContain("DesprovisionarAposFalha", instalarDriver, StringComparison.Ordinal);
+        // /DRIVERBEMATECH=1 de scripts de rollout antigos segue ACEITO e ignorado: documentado no cabeçalho, e
+        // nenhum código o lê (o Inno não reclama de parâmetro desconhecido).
+        var cabecalho = principal[..principal.IndexOf("#ifndef AppVersion", StringComparison.Ordinal)];
+        Assert.Matches(@";\s+/DRIVERBEMATECH=1\s", cabecalho);
+        Assert.Contains("DESCONTINUADOS (aceitos e ignorados", cabecalho, StringComparison.Ordinal);
+        Assert.DoesNotContain("param:DRIVERBEMATECH", principal + provisionamento + Ler("pages.iss"), StringComparison.OrdinalIgnoreCase);
 
-        // [Run] ignora o código de saída (#101a); e o desinstalador do PrintMonitor não remove o driver.
-        var secaoRun = Regex.Match(principal, @"^\[Run\][\s\S]*?(?=^\[)", RegexOptions.Multiline);
-        Assert.False(secaoRun.Success && secaoRun.Value.Contains("Bematech", StringComparison.OrdinalIgnoreCase));
+        // Upgrade não remove o driver que pacotes anteriores instalaram (desinstalador próprio; serve à impressora).
         var desinstalacao = Regex.Match(principal, @"^\[UninstallRun\][\s\S]*?(?=^\[)", RegexOptions.Multiline).Value;
         var entradas = desinstalacao.Split('\n').Where(l => !l.TrimStart().StartsWith(';'));
         Assert.DoesNotContain(entradas, l => l.Contains("Bematech", StringComparison.OrdinalIgnoreCase)

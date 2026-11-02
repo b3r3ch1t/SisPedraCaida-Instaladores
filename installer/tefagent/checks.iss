@@ -14,10 +14,11 @@
    de conexão, sobre a URL que o operador informou — inventar aqui um caminho provável produziria
    um "ausente" falso num terminal que opera.
 
-   ⚠️ A detecção do Elgin TEF HUB (PRD-TEFHUB-01) é a MESMA regra por outro caminho: lemos a chave
-   de desinstalação do produto, que é identidade registrada por ele, e NÃO uma pasta que chutamos.
-   A decisão D7 continua de pé — este instalador **não baixa e não instala** o TEF HUB. A linha é
-   informativa: diz o que está instalado, nunca que o terminal está pronto para operar.
+   ⚠️ A detecção do Elgin TEF HUB e do E1_Connect (PRD-TEFHUB-01, PRD-ELGPRE-01) é a MESMA regra por
+   outro caminho: lemos a chave de desinstalação do produto, que é identidade registrada por ele, e NÃO
+   uma pasta que chutamos. Este instalador **não baixa e não instala** nenhum dos dois (D7, de volta
+   desde 30/10/2026): a ausência BLOQUEIA a instalação (tefhub.iss). "Instalado" continua não sendo
+   "pronto para operar" — isso é o "Testar conexão".
    ============================================================================================ }
 
 const
@@ -34,6 +35,12 @@ const
 
   { Usado só pela varredura de segurança, quando o AppId não bate. }
   MarcaTefHub = 'TEFHUB';
+
+  { AppId do E1_Connect, componente que o pacote do TEF HUB instala junto (é ele que atende o Elgin
+    TEF Web). Levantado em 30/10/2026 num terminal com o "E1_Connect versão 02.01.00", publisher Elgin
+    S/A — também x86, também sob WOW6432Node. }
+  ChaveE1Connect = BaseDesinstalacao + '\{28910153-EEED-4710-BBD3-7B6BADF2E103}_is1';
+  MarcaE1Connect = 'E1_CONNECT';
 
 var
   ResultadoDasChecagens: String;
@@ -135,8 +142,8 @@ end;
 
 { Varre as entradas de desinstalação de UMA visão do registro procurando o produto pelo nome.
   Rede de segurança do AppId: se a Elgin trocar o AppId num release futuro, um "ausente" falso
-  mandaria o técnico instalar o que já está no terminal. }
-function ProcurarTefHubPorNome(Raiz: Integer; var Nome: String; var Versao: String): Boolean;
+  bloquearia a instalação num terminal que já tem o produto. }
+function ProcurarProdutoPorNome(Raiz: Integer; Marca: String; var Nome: String; var Versao: String): Boolean;
 var
   Chaves: TArrayOfString;
   i: Integer;
@@ -151,7 +158,7 @@ begin
   begin
     if RegQueryStringValue(Raiz, BaseDesinstalacao + '\' + Chaves[i], 'DisplayName', NomeAtual) then
     begin
-      if Pos(MarcaTefHub, Uppercase(NomeAtual)) > 0 then
+      if Pos(Marca, Uppercase(NomeAtual)) > 0 then
       begin
         Nome := NomeAtual;
 
@@ -165,29 +172,41 @@ begin
   end;
 end;
 
-{ Indica se o Elgin TEF HUB está INSTALADO neste terminal (não se está no ar — ver o cabeçalho). }
-function TefHubInstalado(var Nome: String; var Versao: String): Boolean;
+{ Indica se um produto da Elgin está INSTALADO neste terminal (não se está no ar — ver o cabeçalho):
+  pelo AppId exato e, quando ele não bate, pela marca no nome. }
+function ProdutoElginInstalado(Chave, Marca: String; var Nome: String; var Versao: String): Boolean;
 begin
   Nome := '';
   Versao := '';
 
-  { ⚠️ HKLM32, não HKLM: o TEF HUB é x86 e registra sob WOW6432Node, enquanto ESTE instalador roda
-    em modo 64 bits (ArchitecturesInstallIn64BitMode) — onde `HKLM` aponta para a visão de 64 bits.
-    Ler `HKLM` aqui devolve "ausente" num terminal que opera, que é exatamente o falso negativo que
-    o cabeçalho deste arquivo proíbe. Verificado: a chave existe SÓ sob WOW6432Node. }
-  if RegQueryStringValue(HKLM32, ChaveTefHub, 'DisplayName', Nome) then
+  { ⚠️ HKLM32, não HKLM: os produtos da Elgin são x86 e registram sob WOW6432Node, enquanto ESTE
+    instalador roda em modo 64 bits (ArchitecturesInstallIn64BitMode) — onde `HKLM` aponta para a
+    visão de 64 bits. Ler `HKLM` aqui devolve "ausente" num terminal que opera, que é exatamente o
+    falso negativo que o cabeçalho deste arquivo proíbe. Verificado: as chaves existem SÓ sob
+    WOW6432Node. }
+  if RegQueryStringValue(HKLM32, Chave, 'DisplayName', Nome) then
   begin
-    if not RegQueryStringValue(HKLM32, ChaveTefHub, 'DisplayVersion', Versao) then
+    if not RegQueryStringValue(HKLM32, Chave, 'DisplayVersion', Versao) then
       Versao := '';
 
     Result := True;
     Exit;
   end;
 
-  Result := ProcurarTefHubPorNome(HKLM32, Nome, Versao);
+  Result := ProcurarProdutoPorNome(HKLM32, Marca, Nome, Versao);
 
   if not Result then
-    Result := ProcurarTefHubPorNome(HKLM, Nome, Versao);
+    Result := ProcurarProdutoPorNome(HKLM, Marca, Nome, Versao);
+end;
+
+function TefHubInstalado(var Nome: String; var Versao: String): Boolean;
+begin
+  Result := ProdutoElginInstalado(ChaveTefHub, MarcaTefHub, Nome, Versao);
+end;
+
+function E1ConnectInstalado(var Nome: String; var Versao: String): Boolean;
+begin
+  Result := ProdutoElginInstalado(ChaveE1Connect, MarcaE1Connect, Nome, Versao);
 end;
 
 { Checagens que impedem a instalação. MinVersion e ArchitecturesAllowed do [Setup] já recusam a
@@ -226,7 +245,7 @@ end;
 function TextoDasChecagens(): String;
 var
   Linhas: String;
-  NomeTefHub, VersaoTefHub: String;
+  NomeTefHub, VersaoTefHub, NomeE1Connect, VersaoE1Connect: String;
 begin
   if ResultadoDasChecagens <> '' then
   begin
@@ -255,11 +274,17 @@ begin
   { Duas perguntas distintas, de propósito em linhas distintas: "está instalado?" responde o
     registro, aqui; "está no ar e é o canal certo?" só o botão "Testar conexão" responde. Juntar
     as duas numa linha só produziria um "OK" que o terminal não sustenta. }
+  { "não localizado" só aparece aqui se o produto sumir entre o InitializeSetup (que bloqueia a
+    ausência) e esta tela — o texto não promete que a instalação continua sem ele. }
   if TefHubInstalado(NomeTefHub, VersaoTefHub) then
     Linhas := Linhas + 'Elgin TEF HUB: ' + NomeTefHub + ' — instalado neste terminal.' + #13#10
   else
-    Linhas := Linhas + 'Elgin TEF HUB: não localizado. A instalação do agente CONTINUA; o produto ' +
-              'é instalado e configurado pelo técnico da Elgin, não por este instalador.' + #13#10;
+    Linhas := Linhas + 'Elgin TEF HUB: não localizado.' + #13#10;
+
+  if E1ConnectInstalado(NomeE1Connect, VersaoE1Connect) then
+    Linhas := Linhas + 'Elgin E1_Connect: ' + NomeE1Connect + ' — instalado neste terminal.' + #13#10
+  else
+    Linhas := Linhas + 'Elgin E1_Connect: não localizado.' + #13#10;
 
   Linhas := Linhas + 'Elgin TEF Web: verificado na próxima página, pelo botão "Testar conexão" ' +
             '(o produto é instalado pelo técnico da Elgin, não por este instalador).' + #13#10;

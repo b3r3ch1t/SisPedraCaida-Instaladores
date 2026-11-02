@@ -1,166 +1,108 @@
 { ============================================================================================
-   tefhub.iss — Elgin TEF HUB como pré-requisito: detecta e, quando ausente, BAIXA E INSTALA.
+   tefhub.iss — Elgin TEF HUB e E1_Connect como pré-requisitos BLOQUEANTES: detecta e, quando
+   falta algum, mostra onde baixar e NÃO instala o agente até que o requisito seja atendido.
 
-   ⚠️ Isto INVERTE a decisão D7 do épico `tefagent-installer-windows` ("Elgin TEF Web —
-   pré-requisito verificado, NUNCA instalado"), por decisão expressa de quem publica o produto
-   (15/10/2026). O que a D7 protegia e **continua valendo**: o repositório da Elgin não declara
-   licença, então o `.exe` é baixado do endereço oficial do fornecedor **na máquina do cliente** —
-   nunca embutido no nosso pacote (que ganharia ~396 MB de software de terceiro).
+   ⚠️ Isto DESFAZ a D7-bis do PRD-TEFHUB-01 ("ausente → baixa e instala", 15/10/2026) e volta à D7
+   original — pré-requisito verificado, NUNCA instalado por nós (PRD-ELGPRE-01, 30/10/2026). Em campo
+   o wizard TRAVAVA na instalação do TEF HUB e do E1_Connect: o pacote da Elgin encadeia os
+   instaladores dos componentes (E1_Connect, E1_ETH_Service, providers), e o `/VERYSILENT` que
+   passávamos ao instalador externo não governa o que cada componente faz com a janela dele. Com
+   `ewWaitUntilTerminated` o nosso Setup esperava para sempre. Não reintroduza download nem `Exec` de
+   instalador de terceiro aqui: a guarda TefAgentPreRequisitosElginGuardTests reprova.
 
-   ⚠️ A URL NÃO é a do GitHub "normal". Os `.exe` daquele repositório são **ponteiros de Git LFS
-   de 134 bytes**: `raw.githubusercontent.com` devolve o ponteiro, o download "tem sucesso", grava
-   134 bytes com nome de executável, e a falha só aparece na execução — com uma mensagem do Windows
-   que não menciona LFS em lugar nenhum. Quem entrega o binário é `media.githubusercontent.com`.
+   Por que BLOQUEAR e não só avisar: agente sem TEF HUB/E1_Connect é caixa que não processa cartão,
+   e o "Concluído" do wizard esconderia isso (é o caixa mudo da #101a). Decisão do usuário: parar a
+   instalação até o técnico instalar o produto da Elgin.
 
-   ⚠️ O SHA-256 abaixo é o publicado pelo PRÓPRIO ponteiro LFS do fornecedor, e o Inno o confere
-   antes de a gente executar qualquer coisa: é executável de terceiro, elevado, vindo da rede.
-   Divergiu, o download falha e nada é executado.
-
-   Exige **Inno Setup 6.1+** (é de onde vêm `CreateDownloadPage`/`DownloadTemporaryFile`).
+   ⚠️ Roda no InitializeSetup — antes de qualquer página e de copiar um arquivo — e por isso vale
+   também no silencioso, onde página customizada não roda.
    ============================================================================================ }
 
-#define TefHubVersao     "06.02.00"
-#define TefHubArquivo    "64Elgin-TEFHUB-v06.02.00.exe"
-#define TefHubUrl        "https://media.githubusercontent.com/media/ElginDeveloperCommunity/ElginTEFHUB/master/ELGIN%20TEF%20HUB/Instaladores%20Windows/64Elgin%20TEFHUB-v06.02.00.exe"
-#define TefHubSha256     "306bef7a193a6b1d7d4e771da1ba7acb3c1fa43e50c42280d717f670a54ca977"
-#define TefHubTamanhoMB  "396"
+{ A PASTA de instaladores do repositório oficial, não o `.exe`: os `.exe` dali são ponteiros de Git
+  LFS (134 bytes pelo `raw`), e a pasta mostra as versões x64/x86 e as notas. O E1_Connect vem dentro
+  do pacote do TEF HUB — um link só para os dois. }
+#define ElginDownloadUrl "https://github.com/ElginDeveloperCommunity/ElginTEFHUB/tree/master/ELGIN%20TEF%20HUB/Instaladores%20Windows"
 
+{ Lista, um por linha, os produtos da Elgin que faltam neste terminal; vazia quando estão todos. }
+function PreRequisitosElginAusentes(): String;
 var
-  PaginaDownloadTefHub: TDownloadWizardPage;
-
-{ Callback de progresso do download. Devolver False cancelaria — o botão Cancelar da página já
-  faz isso por conta própria. }
-function AoProgredirDownloadTefHub(const Url, NomeArquivo: String;
-  const Progresso, TotalProgresso: Int64): Boolean;
-begin
-  if TotalProgresso > 0 then
-    PaginaDownloadTefHub.SetProgress(Progresso, TotalProgresso);
-
-  Result := True;
-end;
-
-procedure CriarPaginaDownloadTefHub();
-begin
-  PaginaDownloadTefHub := CreateDownloadPage(
-    'Pré-requisito: Elgin TEF HUB',
-    'Baixando o instalador oficial da Elgin (cerca de {#TefHubTamanhoMB} MB). ' +
-    'É ele que conversa com o pinpad deste terminal.',
-    @AoProgredirDownloadTefHub);
-end;
-
-{ Rollout silencioso em vários terminais puxando ~396 MB cada um satura o link do cliente. O
-  parâmetro é a válvula de escape de quem conhece a rede do balcão — e a ausência dele mantém o
-  comportamento pedido: baixar e instalar quando faltar. }
-function PularTefHub(): Boolean;
-begin
-  Result := Parametro('SEMTEFHUB', '0') = '1';
-end;
-
-{ Executa o instalador da Elgin.
-  ⚠️ `Exec` + `ResultCode` conferido, NUNCA `[Run]`: o `[Run]` do Inno **ignora** o código de saída
-  e o wizard diria "Concluído" com o pré-requisito ausente — é a armadilha #101a, já paga neste
-  mesmo instalador.
-  Os comutadores são os do Inno porque o produto da Elgin registra a desinstalação com o sufixo
-  `_is1`, que é assinatura do próprio Inno. Se um release futuro trocar de empacotador, quem
-  denuncia na hora é o `ResultCode` — e é por isso que ele é conferido em vez de presumido. }
-function InstalarTefHub(const Caminho: String; var Codigo: Integer): Boolean;
-begin
-  Result := Exec(Caminho, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_SHOW,
-                 ewWaitUntilTerminated, Codigo) and (Codigo = 0);
-end;
-
-{ Baixa o instalador para a pasta temporária do Setup. Devolve string vazia no sucesso, ou a razão
-  da falha.
-  ⚠️ Comentário de chaves NÃO aninha: escrever a constante tmp entre chaves aqui encerraria o
-  comentário na chave de fechamento dela, e o resto da linha viraria código. }
-function BaixarTefHub(var Caminho: String): String;
+  Nome, Versao: String;
 begin
   Result := '';
-  Caminho := '';
 
-  PaginaDownloadTefHub.Clear;
-  PaginaDownloadTefHub.Add('{#TefHubUrl}', '{#TefHubArquivo}', '{#TefHubSha256}');
-  PaginaDownloadTefHub.Show;
+  if TefHubInstalado(Nome, Versao) then
+    Log('[TefAgent] Elgin TEF HUB instalado: ' + Nome)
+  else
+    Result := Result + '   • Elgin TEF HUB' + #13#10;
 
-  try
-    try
-      PaginaDownloadTefHub.Download;
-      Caminho := ExpandConstant('{tmp}\{#TefHubArquivo}');
-    except
-      Result := GetExceptionMessage;
-    end;
-  finally
-    PaginaDownloadTefHub.Hide;
-  end;
+  if E1ConnectInstalado(Nome, Versao) then
+    Log('[TefAgent] Elgin E1_Connect instalado: ' + Nome)
+  else
+    Result := Result + '   • Elgin E1_Connect (instalado junto com o TEF HUB)' + #13#10;
 end;
 
-{ Garante o pré-requisito. Devolve False só para SEGURAR o wizard na tela anterior quando o
-  operador decide não seguir — falhar aqui não derruba a instalação do agente por conta própria:
-  um terminal com o agente instalado e o TEF HUB pendente é recuperável (o técnico da Elgin passa
-  depois); um wizard que aborta no meio deixa o balcão sem nada. }
-function GarantirTefHub(): Boolean;
+{ Abre a página de download no navegador do operador. `AsOriginalUser`: o Setup roda elevado, e o
+  navegador aberto como administrador nem sempre é o do operador (nem tem a sessão dele). }
+procedure AbrirPaginaDownloadElgin();
 var
-  Nome, Versao, Caminho, Falha, Mensagem: String;
   Codigo: Integer;
+begin
+  if not ShellExecAsOriginalUser('open', '{#ElginDownloadUrl}', '', '', SW_SHOWNORMAL, ewNoWait, Codigo) then
+    Log('[TefAgent] Não foi possível abrir o navegador (' + SysErrorMessage(Codigo) + ').');
+end;
+
+{ Garante os pré-requisitos da Elgin. Devolve False para o InitializeSetup encerrar o instalador
+  (código de saída 1) — no silencioso, na primeira ausência; no interativo, quando o operador cancela.
+  No interativo o diálogo fica em laço: o técnico instala o TEF HUB com ele aberto e clica em
+  "Verificar novamente", sem reabrir o nosso instalador. }
+function GarantirPreRequisitosElgin(): Boolean;
+var
+  Ausentes, Texto: String;
+  Escolha: Integer;
 begin
   Result := True;
 
-  if TefHubInstalado(Nome, Versao) then
+  { Significava "não baixar o TEF HUB"; nada é baixado agora. Aceito para não quebrar script de
+    rollout, mas NÃO pula a checagem — pular é exatamente o caixa mudo que o bloqueio evita. }
+  if Parametro('SEMTEFHUB', '0') = '1' then
+    Log('[TefAgent] /SEMTEFHUB=1 ignorado: o instalador não baixa mais o TEF HUB, e a checagem ' +
+        'dos pré-requisitos da Elgin não é opcional.');
+
+  Ausentes := PreRequisitosElginAusentes();
+
+  while Ausentes <> '' do
   begin
-    Log('[TefAgent] Elgin TEF HUB já instalado (' + Nome + ') — nada a baixar.');
-    Exit;
+    Log('[TefAgent] BLOQUEIO: pré-requisito da Elgin ausente:' + #13#10 + Ausentes);
+
+    Texto := 'Este terminal ainda não tem:' + #13#10 + Ausentes
+             + #13#10 + 'Baixe e instale o Elgin TEF HUB (ele instala o E1_Connect junto) pela página '
+             + 'oficial da Elgin:' + #13#10 + '{#ElginDownloadUrl}'
+             + #13#10#13#10 + 'O agente TEF só é instalado com os dois presentes neste terminal.';
+
+    { Em /SUPPRESSMSGBOXES a caixa não aparece; o log e o código de saída levam a razão. }
+    if WizardSilent() then
+    begin
+      SuppressibleMsgBox('Instalação interrompida.' + #13#10#13#10 + Texto, mbCriticalError, MB_OK, IDOK);
+      Result := False;
+      Exit;
+    end;
+
+    { ⚠️ O array dos rótulos não pode abrir linha: o compilador lê toda linha iniciada por colchete
+      como cabeçalho de seção ("Invalid section tag"), mesmo dentro do código. }
+    Escolha := TaskDialogMsgBox('Pré-requisito da Elgin ausente',
+      Texto + #13#10#13#10 + 'Depois de instalar, clique em "Verificar novamente".',
+      mbError, MB_YESNOCANCEL, ['&Abrir a página de download'#13#10'Abre o endereço acima no navegador.',
+      '&Verificar novamente'#13#10'Use depois de instalar o Elgin TEF HUB.'], 0);
+
+    if Escolha = IDYES then
+      AbrirPaginaDownloadElgin()
+    else if Escolha <> IDNO then
+    begin
+      Log('[TefAgent] Instalação cancelada pelo operador com o pré-requisito da Elgin ausente.');
+      Result := False;
+      Exit;
+    end;
+
+    Ausentes := PreRequisitosElginAusentes();
   end;
-
-  if PularTefHub() then
-  begin
-    Log('[TefAgent] Elgin TEF HUB ausente, mas /SEMTEFHUB=1 pediu para não baixar.');
-    Exit;
-  end;
-
-  Log('[TefAgent] Elgin TEF HUB ausente: baixando {#TefHubArquivo} (~{#TefHubTamanhoMB} MB).');
-  Falha := BaixarTefHub(Caminho);
-
-  if Falha <> '' then
-  begin
-    Log('[TefAgent] Falha ao baixar o Elgin TEF HUB: ' + Falha);
-
-    Mensagem := 'Não foi possível baixar o Elgin TEF HUB:' + #13#10 + Falha + #13#10#13#10 +
-                'Causas comuns: o terminal está sem internet, ou a cota de banda do repositório ' +
-                'do fornecedor se esgotou (o arquivo é servido por Git LFS).' + #13#10#13#10 +
-                'A instalação do agente pode continuar — instale o TEF HUB depois por:' + #13#10 +
-                '{#TefHubUrl}' + #13#10#13#10 +
-                'Continuar a instalação do agente mesmo assim?';
-
-    { Em modo silencioso o default (IDYES) vale: o rollout segue e a razão fica no log. }
-    Result := SuppressibleMsgBox(Mensagem, mbError, MB_YESNO, IDYES) = IDYES;
-    Exit;
-  end;
-
-  Log('[TefAgent] Download conferido (SHA-256 bateu). Executando o instalador da Elgin.');
-
-  if InstalarTefHub(Caminho, Codigo) then
-  begin
-    { "Saiu com 0" não é "está instalado" — a mesma distinção que a #101d faz entre o `sc start`
-      aceitar o comando e o serviço estar RUNNING. Quem confirma é o registro. }
-    if TefHubInstalado(Nome, Versao) then
-      Log('[TefAgent] Elgin TEF HUB instalado: ' + Nome)
-    else
-      Log('[TefAgent] ATENÇÃO: o instalador do TEF HUB saiu com 0 e o produto não aparece no ' +
-          'registro — tratar como ausente no diagnóstico.');
-
-    Exit;
-  end;
-
-  Log('[TefAgent] Instalador do Elgin TEF HUB terminou com o código ' + IntToStr(Codigo) + '.');
-
-  { ⚠️ O `+` abre as linhas de continuação de propósito. O pré-processador do Inno trata como
-    DIRETIVA toda linha cujo primeiro caractere não-branco é `#` — e `#13#10` no início de uma
-    quebra de string reprova a compilação inteira com "Unknown preprocessor directive", sem
-    nenhuma pista de que o problema é a indentação. }
-  Mensagem := 'O instalador do Elgin TEF HUB terminou com o código ' + IntToStr(Codigo) + '.'
-              + #13#10#13#10 + 'O arquivo baixado está em:' + #13#10 + Caminho
-              + #13#10#13#10 + 'Você pode executá-lo à mão depois.'
-              + #13#10#13#10 + 'Continuar a instalação do agente mesmo assim?';
-
-  Result := SuppressibleMsgBox(Mensagem, mbError, MB_YESNO, IDYES) = IDYES;
 end;

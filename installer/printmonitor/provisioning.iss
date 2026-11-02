@@ -150,7 +150,9 @@ end;
   reenviá-las ligaria o loopback de uma estação em que o suporte o desligou de propósito. Numa estação
   sem origens gravadas, as do pacote (OrigensPadrao) contam como mudança: vão ao Setup.exe, que liga o
   loopback (LoopbackPrint:Enabled=true) e gera o RouteSecret que faltar — a identificação pelo navegador
-  sai funcionando da instalação padrão.
+  sai funcionando da instalação padrão. A escolha de impressoras (PRD-PMSEL-INST-02) segue a mesma regra:
+  só vai quando difere da gravada; e a padrão vazia não precisa de linha — informadas as habilitadas, o
+  Setup.exe grava a padrão como vazia (nenhuma).
 
   Vive na pasta temporária do Inno (privada desta execução, removida no fim) e é apagado logo depois da
   chamada pelo ExecutarProvisionamento. Devolve o caminho, ou '' quando não há nada a levar. }
@@ -161,7 +163,7 @@ var
 begin
   Result := '';
   N := 0;
-  SetArrayLength(Linhas, 5);
+  SetArrayLength(Linhas, 7);
 
   if ValorChave <> '' then
   begin
@@ -193,6 +195,18 @@ begin
     N := N + 1;
   end;
 
+  if SelecaoDeImpressorasMudou() then
+  begin
+    Linhas[N] := 'ImpressorasHabilitadas=' + ValorImpressoras;
+    N := N + 1;
+
+    if ValorImpressoraPadrao <> '' then
+    begin
+      Linhas[N] := 'ImpressoraPadrao=' + ValorImpressoraPadrao;
+      N := N + 1;
+    end;
+  end;
+
   if N = 0 then
     Exit;
 
@@ -202,72 +216,6 @@ begin
   if not SaveStringsToUTF8File(Result, Linhas, False) then
     RaiseException('Não foi possível gravar o arquivo de resposta do provisionamento em ' + Result + '.' + #13#10 +
                    'Sem ele a estação ficaria sem a chave do agente; a instalação foi interrompida.');
-end;
-
-{ ------------------------------------------------------------------------------------------
-  Driver OBRIGATÓRIO da impressora Bematech MP-4200 TH (spooler x64 v5.0.0.4, instalador Inno 5.5.7)
-  — PRD-PMTRAY-02: sempre empacotado e sempre instalado; /DRIVERBEMATECH=1 é aceito e ignorado.
-
-  Roda DEPOIS do provisionamento bem-sucedido: se o Windows pedir confirmação de driver (ou travar
-  esperando alguém no silencioso), o agente já está instalado e reportando. POLÍTICA DE FALHA
-  (decisão registrada no PRD-PMTRAY-02): "obrigatório" quer dizer sempre tentado, não condição de
-  sucesso — falha do driver NÃO reprova a instalação, vai para o log e para a tela final. Reprovar
-  chamaria o --uninstall e deixaria a estação SEM AGENTE por causa de um driver. O desinstalador do
-  PrintMonitor não remove o driver.
-  ------------------------------------------------------------------------------------------ }
-
-var
-  AvisoDriverBematech: String;
-  DriverBematechInstalado: Boolean;
-
-procedure InstalarDriverBematech();
-var
-  Instalador, LogDriver: String;
-  Codigo: Integer;
-begin
-  AvisoDriverBematech := '';
-  DriverBematechInstalado := False;
-
-  Instalador := ExpandConstant('{tmp}\{#BematechDriverFile}');
-  if not FileExists(Instalador) then
-  begin
-    AvisoDriverBematech := 'o instalador do driver não foi encontrado em ' + Instalador + '.';
-    Log('[PrintMonitor] AVISO: driver da Bematech: ' + AvisoDriverBematech);
-    Exit;
-  end;
-
-  LogDriver := ExpandConstant(PastaDadosPrintMonitor) + '\logs\driver-bematech-' +
-               GetDateTimeString('yyyymmdd_hhnnss', #0, #0) + '.log';
-  Status('Instalando o driver da impressora Bematech MP-4200 TH...');
-
-  { Exec()+ResultCode, nunca [Run] (#101a). SW_SHOW: se o Windows pedir confirmação de driver, a
-    janela precisa aparecer para o operador em vez de travar escondida. }
-  if not Exec(Instalador, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /LOG="' + LogDriver + '"', '',
-              SW_SHOW, ewWaitUntilTerminated, Codigo) then
-    AvisoDriverBematech := 'não foi possível iniciar o instalador do driver (' + SysErrorMessage(Codigo) + ').'
-  else if Codigo <> 0 then
-    AvisoDriverBematech := 'o instalador do driver terminou com código ' + IntToStr(Codigo) +
-                           '. Detalhe em ' + LogDriver + '.'
-  else
-    DriverBematechInstalado := True;
-
-  if AvisoDriverBematech <> '' then
-    Log('[PrintMonitor] AVISO: driver da Bematech: ' + AvisoDriverBematech + ' A instalação do agente segue.')
-  else
-    Log('[PrintMonitor] Driver da Bematech instalado; log em ' + LogDriver);
-end;
-
-{ Linha do driver para a tela final: instalado, ou o aviso de que falhou (a instalação do agente segue). }
-function ResumoDriverBematech(): String;
-begin
-  Result := '';
-
-  if AvisoDriverBematech <> '' then
-    Result := #13#10#13#10 + 'ATENÇÃO — driver da Bematech MP-4200 TH NÃO instalado: ' + AvisoDriverBematech +
-              ' O agente foi instalado normalmente; instale o driver manualmente.'
-  else if DriverBematechInstalado then
-    Result := #13#10#13#10 + 'Driver da Bematech MP-4200 TH instalado. Se a impressora não aparecer, ' +
-              'reinicie o Windows.';
 end;
 
 { ------------------------------------------------------------------------------------------
@@ -417,8 +365,6 @@ begin
     Status('Estação provisionada COM AVISO. Detalhe por etapa em ' + LogDoProvisionamento())
   else
     Status('Estação provisionada. Detalhe por etapa em ' + LogDoProvisionamento());
-
-  InstalarDriverBematech();
 
   { PRD-PMTRAY-05: o serviço já está rodando pelo --all (código 0 ou 4; as falhas saíram acima pelo
     RaiseException). SEMPRE — instalação nova ou upgrade, interativo ou silencioso — sobem agora, como o
