@@ -1,6 +1,6 @@
 # SisPedraCaida-Instaladores — Guia
 
-> **Última atualização deste CLAUDE.md:** 31/10/2026 13:28 (horário local, UTC-3) — instalador do **Migrador
+> **Última atualização deste CLAUDE.md:** 03/11/2026 13:40 (horário local, UTC-3) — **Migrador Galileu removido** (PRD-ICC-INST-01; o tipo `aplicativo` e o `aguardaBackend` seguem no manifesto) · antes (31/10/2026 13:28): instalador do **Migrador
 > Galileu** (`installer/migracao-galileu/`, PRD-MGGINST-01): primeiro instalador de **app de desktop** (sem serviço);
 > manifesto ganha `tipo` e `aguardaBackend` (armadilha **y**) · antes (30/10/2026 17:55): o `PrintMonitorSetup` **escolhe as
 > impressoras da estação** (PRD-PMSEL-INST-02, página "Impressoras desta estação"; `/IMPRESSORAS=`/`/IMPRESSORAPADRAO=`
@@ -45,7 +45,6 @@ pipeline que os gera e publica. Comunicação, docs, commits e PRDs em **portugu
 | `TefAgentSetup-X.Y.Z.exe` | `Tef.Agent` + `Tef.Agent.Setup` + `Tef.Agent.Tray` | [`installer/tefagent/build-installer.ps1`](installer/tefagent/build-installer.ps1) | dev, prod |
 | `PrintMonitorSetup-X.Y.Z.exe` | `PrintMonitor.{Service,Setup,Helper,Bootstrapper,Tray}` | [`installer/printmonitor/build-installer.ps1`](installer/printmonitor/build-installer.ps1) | dev, prod |
 | `TotemSetup-X.Y.Z.exe` | `Totem.Agent` + `Totem.Setup` + `Totem.Shell` (publish no próprio script; bootstrapper do WebView2 do cache do runner, opcional só no build local; guardas em `tests/…/Totem/`) | [`installer/totem/build-installer.ps1`](installer/totem/build-installer.ps1) | dev, prod |
-| `MigracaoGalileuSetup-X.Y.Z.exe` | `Tools.MigracaoGalileu.App` (+ `.Core`): app WinForms, **não** é serviço (`tipo: aplicativo`); `scripts/migracao-galileu-publish.ps1` do backend, single-file; guardas em `tests/…/MigracaoGalileu/` | [`installer/migracao-galileu/build-installer.ps1`](installer/migracao-galileu/build-installer.ps1) | dev, prod (sai da matriz com aviso enquanto a `prod` do backend não tem o código — armadilha **y**) |
 
 A matriz é **[`installer/instaladores-ci.json`](installer/instaladores-ci.json)** — nunca o YAML.
 
@@ -87,7 +86,6 @@ installer/
 ├── assets/sispedracaida.ico
 ├── common/                     # Empacotamento.psm1 (núcleo) + Pester + montar-instalador.ps1/.cmd
 ├── tefagent/  printmonitor/  totem/   # .iss + includes + build-installer.ps1 (+ payloads fora do git)
-├── migracao-galileu/           # app de desktop: um .iss só (sem provisionamento) + build-installer.ps1
 scripts/runner-windows-diagnostico.ps1   # pré-requisitos do runner Windows
 scripts/preparar-runner-windows.ps1      # prepara e registra o runner (admin, idempotente)
 tests/SisPedraCaida.Instaladores.Tests/  # guardas .iss × C# do backend (xUnit, net10.0-windows)
