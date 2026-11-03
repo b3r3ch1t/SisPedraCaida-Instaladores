@@ -1,6 +1,6 @@
 # PRD-ICC-INST-01 — Remoção do MigracaoGalileuSetup
 
-> **Status:** Em andamento — **Última atualização:** 03/11/2026 13:40
+> **Status:** Concluído (em PR) — **Última atualização:** 03/11/2026 20:19
 
 | Campo | Valor |
 |-------|-------|
