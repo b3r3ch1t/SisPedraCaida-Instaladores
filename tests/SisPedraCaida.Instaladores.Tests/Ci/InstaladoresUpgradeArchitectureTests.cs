@@ -38,16 +38,14 @@ public class InstaladoresUpgradeArchitectureTests
     };
 
     /// <summary>
-    /// Agentes mais os aplicativos de desktop (Migrador Galileu, PRD-MGGINST-01), que seguem a política de downgrade e
-    /// de <c>%PROGRAMDATA%</c> mas não a de identidade: sem <c>Setup.exe</c> para parar processo, o aplicativo usa
-    /// <c>CloseApplications=yes</c> (guarda própria em <c>MigracaoGalileuInnoGuardTests</c>).
+    /// Agentes mais os aplicativos de desktop, que seguem a política de downgrade e de <c>%PROGRAMDATA%</c>. Hoje não há
+    /// aplicativo: o Migrador Galileu foi removido (PRD-ICC-INST-01), mas o tipo segue aceito no manifesto.
     /// </summary>
     public static TheoryData<string, string> InstaladoresEAplicativos => new()
     {
         { "tefagent", "TefAgent.iss" },
         { "printmonitor", "PrintMonitor.iss" },
         { "totem", "Totem.iss" },
-        { "migracao-galileu", "MigracaoGalileu.iss" },
     };
 
     /// <summary>AppId fixo, binários com ignoreversion, Inno sem fechar processos por conta própria.</summary>

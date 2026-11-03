@@ -286,8 +286,8 @@ public partial class InstaladoresCiArchitectureTests
     /// <param name="servicos">Windows Services de <c>src/</c>.</param>
     /// <returns>Uma mensagem por problema.</returns>
     /// <remarks>
-    /// <c>servico</c> (padrão): todo projeto é Windows Service. <c>aplicativo</c> (app de desktop, como o Migrador
-    /// Galileu): o <c>.csproj</c> existe em <c>src/</c> e o projeto <b>não</b> é Windows Service — um serviço
+    /// <c>servico</c> (padrão): todo projeto é Windows Service. <c>aplicativo</c> (app de desktop; hoje não há
+    /// nenhum): o <c>.csproj</c> existe em <c>src/</c> e o projeto <b>não</b> é Windows Service — um serviço
     /// declarado como aplicativo escaparia das regras de serviço. Com <c>aguardaBackend</c>, projeto ausente de
     /// <c>src/</c> é esperado: o código ainda não chegou à branch do backend contra a qual a guarda roda.
     /// </remarks>
