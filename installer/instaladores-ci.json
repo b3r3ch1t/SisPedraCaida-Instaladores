@@ -40,16 +40,6 @@
         }
       ],
       "canais": ["dev", "prod"]
-    },
-    {
-      "servico": "migracao-galileu",
-      "nome": "MigracaoGalileuSetup",
-      "script": "installer/migracao-galileu/build-installer.ps1",
-      "tipo": "aplicativo",
-      "projetos": ["SisPedraCaida.Tools.MigracaoGalileu.App"],
-      "payloads": [],
-      "canais": ["dev", "prod"],
-      "aguardaBackend": "b3r3ch1t/SisPedraCaida-Backend#1396 (na dev do backend desde 31/10/2026; falta chegar a prod)"
     }
   ],
   "pendentes": []
